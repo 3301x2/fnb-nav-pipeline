@@ -216,7 +216,9 @@ if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
         "ML.PREDICT → assign clusters → name segments → join demographics"
 
     run_sql "${SQL_DIR}/03_ml/train_churn_model.sql" \
-        "Churn classifier training (boosted tree, 15 features)"
+        "Churn classifier training (logistic regression, 15 features)"
+
+    bq rm -f fmn-sandbox:marts.mart_churn_risk 2>/dev/null || true
 
     run_sql "${SQL_DIR}/03_ml/predict_churn.sql" \
         "Churn prediction → probability scores → mart_churn_risk"
