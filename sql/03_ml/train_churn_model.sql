@@ -35,11 +35,10 @@
 
 CREATE OR REPLACE MODEL `fmn-sandbox.analytics.churn_classifier`
 OPTIONS (
-    model_type = 'BOOSTED_TREE_CLASSIFIER',
+    model_type = 'LOGISTIC_REG',
     input_label_cols = ['churned'],
     auto_class_weights = TRUE,
     max_iterations = 50,
-    learn_rate = 0.1,
     data_split_method = 'AUTO_SPLIT'
 ) AS
 
