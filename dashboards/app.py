@@ -559,7 +559,7 @@ elif page == "🗺️ Geo Insights":
 elif page == "⚠️ Churn Risk":
     st.title("Churn Risk Analysis")
     st.markdown("""
-    **ML-powered churn prediction** using a gradient boosted tree classifier trained on
+    **ML-powered churn prediction** using a logistic regression classifier trained on
     customer behavioral patterns. Each customer gets a churn probability score (0-100%)
     based on 15 features including transaction trends, shopping diversity, and demographics.
     """)
