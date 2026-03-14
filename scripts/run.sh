@@ -189,20 +189,24 @@ fi
 
 
 # ══════════════════════════════════════════════════════════════
-# STEP 3: ML Model
+# STEP 3: ML Models
 # Creates: analytics.kmeans_customer_segments (MODEL),
-#          marts.mart_cluster_output (TABLE)
+#          analytics.churn_classifier (MODEL),
+#          marts.mart_cluster_output (TABLE),
+#          marts.mart_churn_risk (TABLE)
 # Depends: Step 2 (int_rfm_scores must exist)
 #
-# ⚠️  This step takes ~2-3 minutes:
-#   - train_model.sql runs CREATE MODEL (trains k-means, ~60-120s)
-#   - predict_and_name.sql runs ML.PREDICT (assigns clusters, ~30s)
+# ⚠️  This step takes ~5-10 minutes:
+#   - train_model.sql: k-means clustering (~60-120s)
+#   - predict_and_name.sql: cluster assignment (~30s)
+#   - train_churn_model.sql: boosted tree classifier (~3-5 min)
+#   - predict_churn.sql: churn probability scoring (~1-2 min)
 # ══════════════════════════════════════════════════════════════
 if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
-    log "STEP 3: ML layer"
-    log "  → train_model.sql: CREATE MODEL (k-means, 9 features, k=5)"
-    log "  → predict_and_name.sql: ML.PREDICT → segment names → mart_cluster_output"
-    log "  ⏱️  This step takes ~2-3 minutes..."
+    log "STEP 3: ML layer (2 models)"
+    log "  → K-means customer segmentation"
+    log "  → Boosted tree churn classifier"
+    log "  ⏱️  This step takes ~5-10 minutes..."
     STEP_START=$(date +%s)
 
     run_sql "${SQL_DIR}/03_ml/train_model.sql" \
@@ -211,13 +215,23 @@ if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
     run_sql "${SQL_DIR}/03_ml/predict_and_name.sql" \
         "ML.PREDICT → assign clusters → name segments → join demographics"
 
+    run_sql "${SQL_DIR}/03_ml/train_churn_model.sql" \
+        "Churn classifier training (boosted tree, 15 features)"
+
+    run_sql "${SQL_DIR}/03_ml/predict_churn.sql" \
+        "Churn prediction → probability scores → mart_churn_risk"
+
     ok "Step 3 complete ($(elapsed ${STEP_START}))"
     echo ""
     echo "  ✅ Check BigQuery:"
-    echo "     -- Model exists:"
+    echo "     -- K-means model:"
     echo "     SELECT * FROM ML.EVALUATE(MODEL analytics.kmeans_customer_segments);"
-    echo "     -- Segments are assigned:"
+    echo "     -- Segments:"
     echo "     SELECT segment_name, COUNT(*) AS n FROM marts.mart_cluster_output GROUP BY 1 ORDER BY n DESC;"
+    echo "     -- Churn model:"
+    echo "     SELECT * FROM ML.EVALUATE(MODEL analytics.churn_classifier);"
+    echo "     -- Churn scores:"
+    echo "     SELECT churn_risk_level, COUNT(*) AS n FROM marts.mart_churn_risk GROUP BY 1 ORDER BY n DESC;"
     echo ""
     if [[ "${STEP}" == "3" ]]; then
         echo "  Next: bash scripts/run.sh 4"
@@ -232,7 +246,7 @@ fi
 # Depends: Steps 1-3 (all upstream tables + model must exist)
 # ══════════════════════════════════════════════════════════════
 if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
-    log "STEP 4: Mart layer (8 tables)"
+    log "STEP 4: Mart layer (7 tables — churn already built in step 3)"
     STEP_START=$(date +%s)
 
     run_sql "${SQL_DIR}/04_marts/mart_cluster_profiles.sql" \
@@ -246,9 +260,6 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
 
     run_sql "${SQL_DIR}/04_marts/mart_geo_summary.sql" \
         "mart_geo_summary (province × municipality × category)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_churn_risk.sql" \
-        "mart_churn_risk (customer-level risk scoring)"
 
     run_sql "${SQL_DIR}/04_marts/mart_monthly_trends.sql" \
         "mart_monthly_trends (monthly spend per category × destination)"

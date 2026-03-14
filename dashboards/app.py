@@ -558,54 +558,108 @@ elif page == "🗺️ Geo Insights":
 
 elif page == "⚠️ Churn Risk":
     st.title("Churn Risk Analysis")
-    wip_banner("Predictive Churn Scoring")
     st.markdown("""
-    Compares each customer's recent 3 months vs previous 3 months. If transactions
-    dropped AND they haven't bought recently, they're at risk. Rule-based for now —
-    Phase 2 upgrades to supervised ML.
+    **ML-powered churn prediction** using a gradient boosted tree classifier trained on
+    customer behavioral patterns. Each customer gets a churn probability score (0-100%)
+    based on 15 features including transaction trends, shopping diversity, and demographics.
     """)
 
     try:
         risk = q(f"""
-            SELECT risk_level,
+            SELECT churn_risk_level,
                    COUNT(*) AS customers,
                    ROUND(AVG(total_spend), 0) AS avg_spend,
+                   ROUND(AVG(churn_probability) * 100, 1) AS avg_churn_pct,
                    ROUND(AVG(days_since_last), 0) AS avg_days_since_last,
                    ROUND(AVG(txns_last_3m), 1) AS avg_recent_txns,
                    ROUND(SUM(total_spend), 0) AS total_spend_at_risk
             FROM `{PROJECT}.marts.mart_churn_risk`
-            GROUP BY risk_level
-            ORDER BY CASE risk_level
-                WHEN 'Churned' THEN 1 WHEN 'High Risk' THEN 2
-                WHEN 'Medium Risk' THEN 3 WHEN 'Low Risk' THEN 4 ELSE 5 END
+            GROUP BY churn_risk_level
+            ORDER BY CASE churn_risk_level
+                WHEN 'Critical' THEN 1 WHEN 'High' THEN 2
+                WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END
         """)
 
         if not risk.empty:
             total_cust = risk["customers"].sum()
 
+            # KPI row
+            critical = risk[risk["churn_risk_level"] == "Critical"]
+            high = risk[risk["churn_risk_level"] == "High"]
+            at_risk_cust = 0
+            at_risk_spend = 0
+            if not critical.empty:
+                at_risk_cust += critical.iloc[0]["customers"]
+                at_risk_spend += critical.iloc[0]["total_spend_at_risk"]
+            if not high.empty:
+                at_risk_cust += high.iloc[0]["customers"]
+                at_risk_spend += high.iloc[0]["total_spend_at_risk"]
+
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Total scored", f"{total_cust:,}")
+            k2.metric("Critical + High", f"{int(at_risk_cust):,}")
+            k3.metric("Spend at risk", format_rand(at_risk_spend))
+            k4.metric("Recovery (10%)", format_rand(at_risk_spend * 0.1))
+
+            churn_colors = {
+                "Critical": "#d32f2f", "High": "#f57c00",
+                "Medium": "#fbc02d", "Low": "#4caf50", "Stable": "#2196f3"
+            }
+
             col1, col2 = st.columns(2)
             with col1:
-                fig = px.pie(risk, values="customers", names="risk_level",
-                             title="Customer risk distribution",
-                             color="risk_level", color_discrete_map=RISK_COLORS)
+                fig = px.pie(risk, values="customers", names="churn_risk_level",
+                             title="Churn risk distribution (ML-scored)",
+                             color="churn_risk_level", color_discrete_map=churn_colors)
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
-                fig2 = px.bar(risk, x="risk_level", y="total_spend_at_risk",
-                              color="risk_level", color_discrete_map=RISK_COLORS,
-                              title="Spend at risk")
+                fig2 = px.bar(risk, x="churn_risk_level", y="total_spend_at_risk",
+                              color="churn_risk_level", color_discrete_map=churn_colors,
+                              title="Spend at risk by level")
                 fig2.update_layout(showlegend=False)
                 st.plotly_chart(fig2, use_container_width=True)
 
-            high_risk = risk[risk["risk_level"].isin(["Churned", "High Risk"])]
-            if not high_risk.empty:
-                at_risk_spend = high_risk["total_spend_at_risk"].sum()
-                at_risk_cust = high_risk["customers"].sum()
+            # Average churn probability per level
+            fig3 = px.bar(risk, x="churn_risk_level", y="avg_churn_pct",
+                          color="churn_risk_level", color_discrete_map=churn_colors,
+                          title="Average ML churn probability (%)",
+                          labels={"avg_churn_pct": "Avg probability %", "churn_risk_level": ""})
+            fig3.update_layout(showlegend=False, height=350)
+            st.plotly_chart(fig3, use_container_width=True)
+
+            # Detail table
+            st.subheader("Risk level breakdown")
+            display = risk.copy()
+            display["pct_of_total"] = (display["customers"] / total_cust * 100).round(1)
+            st.dataframe(display.rename(columns={
+                "churn_risk_level": "Risk level", "customers": "Customers",
+                "pct_of_total": "% of total", "avg_churn_pct": "Avg churn %",
+                "avg_spend": "Avg spend (R)", "avg_days_since_last": "Days since last",
+                "avg_recent_txns": "Avg txns (3M)", "total_spend_at_risk": "Spend at risk (R)"
+            }), use_container_width=True, hide_index=True)
+
+            if at_risk_cust > 0:
                 st.warning(
-                    f"**{at_risk_cust:,} customers ({at_risk_cust/total_cust*100:.1f}%) "
-                    f"are Churned or High Risk, representing {format_rand(at_risk_spend)} "
-                    f"in historical spend.** A 10% re-engagement rate would recover "
-                    f"~{format_rand(at_risk_spend * 0.1)}."
+                    f"**{int(at_risk_cust):,} customers ({at_risk_cust/total_cust*100:.1f}%) are Critical or High risk, "
+                    f"representing {format_rand(at_risk_spend)} in historical spend.** "
+                    f"A 10% re-engagement rate would recover ~{format_rand(at_risk_spend * 0.1)}."
                 )
+
+            # Model performance
+            st.subheader("Model performance")
+            try:
+                model_eval = q(f"""
+                    SELECT * FROM ML.EVALUATE(MODEL `{PROJECT}.analytics.churn_classifier`)
+                """)
+                if not model_eval.empty:
+                    me = model_eval.iloc[0]
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Accuracy", f"{me.get('accuracy', 0):.3f}")
+                    m2.metric("Precision", f"{me.get('precision', 0):.3f}")
+                    m3.metric("Recall", f"{me.get('recall', 0):.3f}")
+                    m4.metric("F1 Score", f"{me.get('f1_score', 0):.3f}")
+            except Exception:
+                st.info("Model metrics not available. Run train_churn_model.sql first.")
 
     except Exception as e:
         st.error(f"Query failed: {e}")
