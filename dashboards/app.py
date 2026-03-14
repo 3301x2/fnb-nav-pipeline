@@ -75,8 +75,9 @@ try:
         ORDER BY CATEGORY_TWO
     """)
     category_list = categories["CATEGORY_TWO"].tolist()
-except Exception:
+except Exception as e:
     category_list = []
+    st.sidebar.error(f"Category query failed: {e}")
 
 selected_category = st.sidebar.selectbox(
     "Category", category_list,
@@ -85,15 +86,16 @@ selected_category = st.sidebar.selectbox(
 
 try:
     destinations = q(f"""
-        SELECT DISTINCT DESTINATION
+        SELECT DESTINATION
         FROM `{PROJECT}.marts.mart_destination_benchmarks`
         WHERE CATEGORY_TWO = '{selected_category}'
         ORDER BY total_spend DESC
         LIMIT 50
     """)
     dest_list = destinations["DESTINATION"].tolist()
-except Exception:
+except Exception as e:
     dest_list = []
+    st.sidebar.error(f"Destination query failed: {e}")
 
 selected_client = st.sidebar.selectbox(
     "Client (pitch target)", dest_list,
@@ -115,6 +117,7 @@ page = st.sidebar.radio("Navigate", [
     "⚠️ Churn Risk",
     "📊 Benchmarks",
     "💡 ROI Simulator",
+    "🤖 ML Evaluation",
     "🏥 Data Health"
 ])
 
@@ -722,7 +725,7 @@ elif page == "💡 ROI Simulator":
         """)
 
         if not baseline.empty:
-            b = baseline.iloc[0]
+            b = baseline.iloc[0].fillna(0)
             st.subheader(f"Current baseline — {selected_client}")
             bc1, bc2, bc3 = st.columns(3)
             bc1.metric("Client customers", f"{int(b['total_customers']):,}")
@@ -761,7 +764,158 @@ elif page == "💡 ROI Simulator":
 
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 11: DATA HEALTH
+# PAGE 11: ML EVALUATION
+# ═══════════════════════════════════════════════════════════════
+
+elif page == "🤖 ML Evaluation":
+    st.title("ML Model Evaluation")
+    st.markdown("""
+    **K-means clustering model** trained on 9 customer features using BigQuery ML.
+    This page shows whether the model found meaningful, well-separated segments.
+    """)
+
+    try:
+        # Model metrics
+        st.subheader("Model metrics")
+        eval_df = q(f"""
+            SELECT * FROM ML.EVALUATE(MODEL `{PROJECT}.analytics.kmeans_customer_segments`)
+        """)
+
+        if not eval_df.empty:
+            e = eval_df.iloc[0]
+            c1, c2 = st.columns(2)
+            c1.metric("Davies-Bouldin index", f"{e['davies_bouldin_index']:.4f}",
+                       help="Lower = better separated clusters. Under 2.0 is good for business use.")
+            c2.metric("Mean squared distance", f"{e['mean_squared_distance']:.4f}",
+                       help="Average distance from each customer to their cluster center. Lower = tighter clusters.")
+
+            if e['davies_bouldin_index'] < 2.0:
+                st.success(f"Davies-Bouldin index of {e['davies_bouldin_index']:.4f} indicates well-separated clusters.")
+            else:
+                st.warning(f"Davies-Bouldin index of {e['davies_bouldin_index']:.4f} is above 2.0 — consider tuning k or features.")
+
+        # Training convergence
+        st.subheader("Training convergence")
+        st.markdown("Loss should decrease and then flatten — that means the model found stable cluster centers.")
+        training = q(f"""
+            SELECT iteration,
+                   ROUND(loss, 4) AS loss,
+                   ROUND(loss - LAG(loss) OVER (ORDER BY iteration), 4) AS improvement
+            FROM ML.TRAINING_INFO(MODEL `{PROJECT}.analytics.kmeans_customer_segments`)
+            ORDER BY iteration
+        """)
+
+        if not training.empty:
+            fig = px.line(training, x="iteration", y="loss",
+                          title="Training loss per iteration",
+                          markers=True, color_discrete_sequence=[COLORS[0]])
+            fig.update_layout(height=350)
+            st.plotly_chart(fig, use_container_width=True)
+
+            last_improvement = training["improvement"].iloc[-1]
+            if last_improvement is not None and abs(last_improvement) < 0.01:
+                st.success("Model converged — loss is stable in the final iterations.")
+            else:
+                st.info("Check if loss is still decreasing. If so, consider increasing max_iterations.")
+
+        # Cluster centroids
+        st.subheader("Cluster centroids")
+        st.markdown("The center of each cluster — the average feature values that **define** each segment.")
+        centroids = q(f"""
+            SELECT centroid_id, feature, ROUND(numerical_value, 2) AS value
+            FROM ML.CENTROIDS(MODEL `{PROJECT}.analytics.kmeans_customer_segments`)
+            ORDER BY centroid_id, feature
+        """)
+
+        if not centroids.empty:
+            pivot = centroids.pivot(index="feature", columns="centroid_id", values="value")
+            st.dataframe(pivot, use_container_width=True)
+
+        # Cluster sizes and balance
+        st.subheader("Cluster balance")
+        st.markdown("Ideally no single cluster has more than 40% of customers.")
+        sizes = q(f"""
+            SELECT segment_name, COUNT(*) AS customers,
+                   ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) AS pct
+            FROM `{PROJECT}.marts.mart_cluster_output`
+            GROUP BY segment_name
+            ORDER BY customers DESC
+        """)
+
+        if not sizes.empty:
+            col1, col2 = st.columns(2)
+            with col1:
+                fig = px.pie(sizes, values="customers", names="segment_name",
+                             title="Cluster distribution",
+                             color_discrete_sequence=COLORS)
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                fig2 = px.bar(sizes, x="segment_name", y="pct",
+                              title="% of customers per segment",
+                              color_discrete_sequence=[COLORS[0]])
+                fig2.update_layout(yaxis_title="%")
+                st.plotly_chart(fig2, use_container_width=True)
+
+            max_pct = sizes["pct"].max()
+            if max_pct <= 40:
+                st.success(f"Good balance — largest cluster is {max_pct}% (under 40% threshold).")
+            else:
+                st.warning(f"Largest cluster is {max_pct}% — may indicate an imbalanced segmentation.")
+
+        # Segment separation
+        st.subheader("Segment separation")
+        st.markdown("Do the segments actually differ? Averages should be clearly distinct.")
+        separation = q(f"""
+            SELECT segment_name,
+                   ROUND(AVG(val_trns), 0) AS avg_spend,
+                   ROUND(AVG(nr_trns), 0) AS avg_txns,
+                   ROUND(AVG(lst_trns_days), 0) AS avg_recency_days,
+                   ROUND(AVG(avg_val), 0) AS avg_txn_value,
+                   ROUND(AVG(active_destinations), 1) AS avg_merchants
+            FROM `{PROJECT}.marts.mart_cluster_output`
+            GROUP BY segment_name
+            ORDER BY avg_spend DESC
+        """)
+
+        if not separation.empty:
+            st.dataframe(separation.rename(columns={
+                "segment_name": "Segment", "avg_spend": "Avg spend (R)",
+                "avg_txns": "Avg txns", "avg_recency_days": "Avg recency (days)",
+                "avg_txn_value": "Avg txn value (R)", "avg_merchants": "Avg merchants"
+            }), use_container_width=True, hide_index=True)
+
+        # Revenue concentration
+        st.subheader("Revenue concentration")
+        revenue = q(f"""
+            SELECT segment_name,
+                   ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) AS pct_customers,
+                   ROUND(SUM(val_trns) * 100.0 / SUM(SUM(val_trns)) OVER(), 1) AS pct_revenue
+            FROM `{PROJECT}.marts.mart_cluster_output`
+            GROUP BY segment_name
+            ORDER BY pct_revenue DESC
+        """)
+
+        if not revenue.empty:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name="% of customers", x=revenue["segment_name"],
+                                 y=revenue["pct_customers"], marker_color=COLORS[7]))
+            fig.add_trace(go.Bar(name="% of revenue", x=revenue["segment_name"],
+                                 y=revenue["pct_revenue"], marker_color=COLORS[0]))
+            fig.update_layout(barmode="group", title="Revenue concentration by segment",
+                              yaxis_title="%", height=400)
+            st.plotly_chart(fig, use_container_width=True)
+
+            champ = revenue[revenue["segment_name"] == "Champions"]
+            if not champ.empty:
+                c = champ.iloc[0]
+                st.info(f"**Champions** are {c['pct_customers']}% of customers but drive {c['pct_revenue']}% of revenue.")
+
+    except Exception as e:
+        st.error(f"Query failed: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# PAGE 12: DATA HEALTH
 # ═══════════════════════════════════════════════════════════════
 
 elif page == "🏥 Data Health":
