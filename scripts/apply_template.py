@@ -45,7 +45,11 @@ def add_bold_and_normal(doc, bold_text, normal_text):
     return p
 
 def add_bullet(doc, text):
-    p = doc.add_paragraph(text, style='List Bullet')
+    try:
+        p = doc.add_paragraph(text, style='List Bullet')
+    except KeyError:
+        p = doc.add_paragraph()
+        p.add_run(f'  \u2022 {text}')
     return p
 
 def add_table(doc, headers, rows, col_widths=None):
