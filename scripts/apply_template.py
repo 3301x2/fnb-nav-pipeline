@@ -101,10 +101,8 @@ def add_callout(doc, text):
 def page_break(doc):
     p = doc.add_paragraph()
     run = p.add_run()
-    run.add_break(docx_break=None)
-    from docx.oxml.ns import qn
-    br = run._r.makeelement(qn('w:br'), {qn('w:type'): 'page'})
-    run._r.append(br)
+    from docx.enum.text import WD_BREAK
+    run.add_break(WD_BREAK.PAGE)
 
 
 # -- executive content --
