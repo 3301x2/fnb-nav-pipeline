@@ -3,7 +3,7 @@
 -- powers the benchmarks page on the dashboard
 -- source: analytics.int_customer_category_spend -> analytics.int_destination_metrics
 
-CREATE OR REPLACE TABLE `fmn-sandbox.analytics.int_destination_metrics`
+CREATE OR REPLACE TABLE `__PROJECT__.analytics.int_destination_metrics`
 CLUSTER BY CATEGORY_TWO, DESTINATION
 AS
 
@@ -18,7 +18,7 @@ WITH destination_agg AS (
         ROUND(SUM(dest_spend) / NULLIF(COUNT(DISTINCT UNIQUE_ID), 0), 0)
                                                                AS spend_per_customer,
         ROUND(AVG(share_of_wallet_pct), 1)                     AS avg_share_of_wallet
-    FROM `fmn-sandbox.analytics.int_customer_category_spend`
+    FROM `__PROJECT__.analytics.int_customer_category_spend`
     GROUP BY CATEGORY_TWO, DESTINATION
 ),
 

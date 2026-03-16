@@ -2,13 +2,13 @@
 -- customer level churn scoring, compares last 3m vs previous 3m
 -- rule-based for now, ML version is in predict_churn.sql
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_churn_risk`
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_churn_risk`
 CLUSTER BY risk_level
 AS
 
 WITH date_bounds AS (
     SELECT MAX(EFF_DATE) AS max_date
-    FROM `fmn-sandbox.staging.stg_transactions`
+    FROM `__PROJECT__.staging.stg_transactions`
 ),
 
 activity AS (
@@ -34,7 +34,7 @@ activity AS (
             WHEN t.EFF_DATE >= DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 6 MONTH)
              AND t.EFF_DATE < DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 3 MONTH)
             THEN t.trns_amt ELSE 0 END), 2)                    AS spend_prev_3m
-    FROM `fmn-sandbox.staging.stg_transactions` t
+    FROM `__PROJECT__.staging.stg_transactions` t
     GROUP BY t.UNIQUE_ID
     HAVING COUNT(*) >= 2
 )
@@ -68,5 +68,5 @@ SELECT
     c.income_group
 
 FROM activity a
-LEFT JOIN `fmn-sandbox.staging.stg_customers` c
+LEFT JOIN `__PROJECT__.staging.stg_customers` c
     ON a.UNIQUE_ID = c.UNIQUE_ID;

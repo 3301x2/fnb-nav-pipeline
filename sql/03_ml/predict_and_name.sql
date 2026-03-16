@@ -3,15 +3,15 @@
 -- names them Champions -> Dormant, joins demographics too
 -- source: kmeans model + int_rfm_scores + stg_customers -> marts.mart_cluster_output
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_cluster_output`
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_cluster_output`
 CLUSTER BY segment_name
 AS
 
 WITH predictions AS (
     SELECT *
     FROM ML.PREDICT(
-        MODEL `fmn-sandbox.analytics.kmeans_customer_segments`,
-        (SELECT * FROM `fmn-sandbox.analytics.int_rfm_scores`)
+        MODEL `__PROJECT__.analytics.kmeans_customer_segments`,
+        (SELECT * FROM `__PROJECT__.analytics.int_rfm_scores`)
     )
 ),
 
@@ -92,5 +92,5 @@ SELECT
     c.gender_label
 
 FROM named n
-LEFT JOIN `fmn-sandbox.staging.stg_customers` c
+LEFT JOIN `__PROJECT__.staging.stg_customers` c
     ON n.UNIQUE_ID = c.UNIQUE_ID;

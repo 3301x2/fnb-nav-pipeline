@@ -1,6 +1,18 @@
-# terraform config for the FNB NAV pipeline
-# creates all BigQuery datasets and table shells, SQL pipeline populates them
-# terraform apply to create, terraform destroy to wipe everthing clean
+# ════════════════════════════════════════════════════════════════
+# FNB NAV Pipeline — Terraform Configuration
+#
+# Creates all BigQuery datasets and table shells.
+# The SQL pipeline populates the tables with data.
+#
+# Usage:
+#   terraform init
+#   terraform plan
+#   terraform apply     → creates everything
+#   terraform destroy   → wipes everything clean
+#
+# This is the "one shot destroy" that was discussed:
+#   "If he needs changes I can just destroy everything."
+# ════════════════════════════════════════════════════════════════
 
 terraform {
   required_version = ">= 1.0"
@@ -12,18 +24,21 @@ terraform {
   }
 }
 
-# -- variables --
+# ── Variables ──────────────────────────────────────────────────
 
 variable "project_id" {
-  description = "GCP project ID"
+  description = "GCP project ID. Use fmn-sandbox for dev/testing, fmn-production for production."
   type        = string
   default     = "fmn-sandbox"
+  # Usage:
+  #   terraform apply                                    → fmn-sandbox
+  #   terraform apply -var="project_id=fmn-production"   → fmn-production
 }
 
 variable "location" {
   description = "BigQuery dataset location"
   type        = string
-  default     = "US"
+  default     = "africa-south1"
 }
 
 variable "pipeline_enabled" {
@@ -32,13 +47,13 @@ variable "pipeline_enabled" {
   default     = true
 }
 
-# -- provider --
+# ── Provider ───────────────────────────────────────────────────
 
 provider "google" {
   project = var.project_id
 }
 
-# -- datasets --
+# ── Datasets ───────────────────────────────────────────────────
 
 resource "google_bigquery_dataset" "staging" {
   count       = var.pipeline_enabled ? 1 : 0
@@ -85,7 +100,7 @@ resource "google_bigquery_dataset" "marts" {
   delete_contents_on_destroy = true
 }
 
-# -- staging tables --
+# ── Staging Tables ─────────────────────────────────────────────
 
 resource "google_bigquery_table" "stg_transactions" {
   count               = var.pipeline_enabled ? 1 : 0
@@ -122,7 +137,7 @@ resource "google_bigquery_table" "stg_customers" {
   }
 }
 
-# -- analytics tables --
+# ── Analytics Tables ───────────────────────────────────────────
 
 resource "google_bigquery_table" "int_rfm_features" {
   count               = var.pipeline_enabled ? 1 : 0
@@ -184,7 +199,7 @@ resource "google_bigquery_table" "int_destination_metrics" {
   }
 }
 
-# -- mart tables --
+# ── Mart Tables ────────────────────────────────────────────────
 
 resource "google_bigquery_table" "mart_cluster_output" {
   count               = var.pipeline_enabled ? 1 : 0
@@ -321,7 +336,7 @@ resource "google_bigquery_table" "mart_destination_benchmarks" {
   }
 }
 
-# -- outputs --
+# ── Outputs ────────────────────────────────────────────────────
 
 output "datasets" {
   description = "Created datasets"

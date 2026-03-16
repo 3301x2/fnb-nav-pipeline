@@ -1,7 +1,7 @@
 -- mart_cluster_summary.sql
 -- business friendly summary with descriptions and recomended actions per segment (5 rows)
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_cluster_summary` AS
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_cluster_summary` AS
 
 SELECT
     segment_name,
@@ -41,5 +41,5 @@ SELECT
         WHEN 'Dormant'          THEN 'Win-Back or Release'
     END                                                            AS recommended_action
 
-FROM `fmn-sandbox.marts.mart_cluster_profiles`
+FROM `__PROJECT__.marts.mart_cluster_profiles`
 ORDER BY avg_total_spend DESC;

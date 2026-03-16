@@ -3,7 +3,7 @@
 -- feeds into the clustering model downstream
 -- source: staging.stg_transactions -> analytics.int_rfm_features
 
-CREATE OR REPLACE TABLE `fmn-sandbox.analytics.int_rfm_features`
+CREATE OR REPLACE TABLE `__PROJECT__.analytics.int_rfm_features`
 CLUSTER BY UNIQUE_ID
 AS
 
@@ -11,12 +11,12 @@ WITH date_bounds AS (
     SELECT
         MAX(EFF_DATE)                            AS max_date,
         DATE_SUB(MAX(EFF_DATE), INTERVAL 12 MONTH) AS start_date
-    FROM `fmn-sandbox.staging.stg_transactions`
+    FROM `__PROJECT__.staging.stg_transactions`
 ),
 
 filtered AS (
     SELECT t.*
-    FROM `fmn-sandbox.staging.stg_transactions` t
+    FROM `__PROJECT__.staging.stg_transactions` t
     CROSS JOIN date_bounds d
     WHERE t.EFF_DATE >= d.start_date
 )

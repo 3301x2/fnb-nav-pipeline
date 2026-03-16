@@ -3,7 +3,7 @@
 -- renames demo_* fields to readable names, adds pre-binned age/income groups
 -- source: customer_spend.base_data -> staging.stg_customers
 
-CREATE OR REPLACE TABLE `fmn-sandbox.staging.stg_customers`
+CREATE OR REPLACE TABLE `__PROJECT__.staging.stg_customers`
 CLUSTER BY income_segment, gender
 AS
 
@@ -14,7 +14,7 @@ WITH ranked AS (
             PARTITION BY UNIQUE_ID
             ORDER BY month DESC
         ) AS rn
-    FROM `fmn-sandbox.customer_spend.base_data`
+    FROM `__PROJECT__.customer_spend.base_data`
     WHERE UNIQUE_ID IS NOT NULL
 )
 

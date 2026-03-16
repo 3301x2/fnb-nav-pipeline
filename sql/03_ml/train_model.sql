@@ -3,7 +3,7 @@
 -- standardize_features=TRUE so no single feture dominates
 -- source: analytics.int_rfm_scores -> analytics.kmeans_customer_segments
 
-CREATE OR REPLACE MODEL `fmn-sandbox.analytics.kmeans_customer_segments`
+CREATE OR REPLACE MODEL `__PROJECT__.analytics.kmeans_customer_segments`
 OPTIONS (
     model_type   = 'KMEANS',
     num_clusters = 5,
@@ -21,4 +21,4 @@ SELECT
     active_nav_categories,
     NR_TRNS_WEEKEND,
     NR_TRNS_WEEK
-FROM `fmn-sandbox.analytics.int_rfm_scores`;
+FROM `__PROJECT__.analytics.int_rfm_scores`;

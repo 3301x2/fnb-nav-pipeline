@@ -3,7 +3,7 @@
 -- this is the foundation for share-of-wallet analysis
 -- source: staging.stg_transactions -> analytics.int_customer_category_spend
 
-CREATE OR REPLACE TABLE `fmn-sandbox.analytics.int_customer_category_spend`
+CREATE OR REPLACE TABLE `__PROJECT__.analytics.int_customer_category_spend`
 PARTITION BY DATE_TRUNC(last_txn_date, MONTH)
 CLUSTER BY CATEGORY_TWO, DESTINATION
 AS
@@ -12,7 +12,7 @@ WITH date_bounds AS (
     SELECT
         MAX(EFF_DATE)                              AS max_date,
         DATE_SUB(MAX(EFF_DATE), INTERVAL 12 MONTH) AS start_date
-    FROM `fmn-sandbox.staging.stg_transactions`
+    FROM `__PROJECT__.staging.stg_transactions`
 ),
 
 -- per customer x destination within category
@@ -24,7 +24,7 @@ customer_destination AS (
         COUNT(*)                                   AS dest_txn_count,
         ROUND(SUM(t.trns_amt), 2)                 AS dest_spend,
         MAX(t.EFF_DATE)                            AS last_txn_date
-    FROM `fmn-sandbox.staging.stg_transactions` t
+    FROM `__PROJECT__.staging.stg_transactions` t
     CROSS JOIN date_bounds d
     WHERE t.EFF_DATE >= d.start_date
       AND t.CATEGORY_TWO IS NOT NULL

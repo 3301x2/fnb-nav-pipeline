@@ -2,7 +2,7 @@
 -- every destination's KPIs within its category
 -- dashboard picks a client, shows them by name, anonymises the rest as competitors
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_destination_benchmarks`
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_destination_benchmarks`
 CLUSTER BY CATEGORY_TWO
 AS
 
@@ -19,5 +19,5 @@ SELECT
     penetration_pct,
     spend_rank
 
-FROM `fmn-sandbox.analytics.int_destination_metrics`
+FROM `__PROJECT__.analytics.int_destination_metrics`
 WHERE total_spend > 0;

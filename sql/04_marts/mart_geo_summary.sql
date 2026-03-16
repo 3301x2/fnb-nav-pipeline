@@ -1,7 +1,7 @@
 -- mart_geo_summary.sql
 -- spend by province x municipality with category breakdown for geo views
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_geo_summary`
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_geo_summary`
 CLUSTER BY PROVINCE, CATEGORY_TWO
 AS
 
@@ -15,7 +15,7 @@ SELECT
     ROUND(AVG(t.trns_amt), 2)                                  AS avg_txn,
     COUNT(DISTINCT t.DESTINATION)                               AS distinct_merchants
 
-FROM `fmn-sandbox.staging.stg_transactions` t
+FROM `__PROJECT__.staging.stg_transactions` t
 WHERE t.PROVINCE IS NOT NULL
   AND t.CATEGORY_TWO IS NOT NULL
 GROUP BY t.PROVINCE, t.MUNICIPALITY, t.CATEGORY_TWO;

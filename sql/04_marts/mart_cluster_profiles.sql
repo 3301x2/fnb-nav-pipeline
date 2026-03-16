@@ -1,7 +1,7 @@
 -- mart_cluster_profiles.sql
 -- one row per segment with averages, ranges, and demographics (5 rows)
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_cluster_profiles` AS
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_cluster_profiles` AS
 
 SELECT
     segment_name,
@@ -48,6 +48,6 @@ SELECT
     APPROX_TOP_COUNT(age_group, 1)[OFFSET(0)].value                AS top_age_group,
     APPROX_TOP_COUNT(income_group, 1)[OFFSET(0)].value             AS top_income_group
 
-FROM `fmn-sandbox.marts.mart_cluster_output`
+FROM `__PROJECT__.marts.mart_cluster_output`
 GROUP BY segment_name, cluster_id
 ORDER BY avg_total_spend DESC;

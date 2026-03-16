@@ -3,7 +3,7 @@
 -- outputs churn_probability (0-1) and risk level (Critical to Stable)
 -- source: churn_classifier model + stg_transactions + stg_customers
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_churn_risk`
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_churn_risk`
 CLUSTER BY churn_risk_level
 AS
 
@@ -11,7 +11,7 @@ WITH date_bounds AS (
     SELECT
         MAX(EFF_DATE) AS max_date,
         DATE_SUB(MAX(EFF_DATE), INTERVAL 12 MONTH) AS start_date
-    FROM `fmn-sandbox.staging.stg_transactions`
+    FROM `__PROJECT__.staging.stg_transactions`
 ),
 
 -- build current features (same shape as training data)
@@ -42,7 +42,7 @@ current_features AS (
             t.EFF_DATE >= DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 6 MONTH)
             AND t.EFF_DATE < DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 3 MONTH)
         ) AS txns_prev_3m
-    FROM `fmn-sandbox.staging.stg_transactions` t
+    FROM `__PROJECT__.staging.stg_transactions` t
     CROSS JOIN date_bounds d
     WHERE t.EFF_DATE >= d.start_date
     GROUP BY t.UNIQUE_ID
@@ -69,14 +69,14 @@ model_input AS (
         COALESCE(c.estimated_income, 0) AS estimated_income,
         COALESCE(c.main_banked, 0) AS main_banked
     FROM current_features cf
-    LEFT JOIN `fmn-sandbox.staging.stg_customers` c ON cf.UNIQUE_ID = c.UNIQUE_ID
+    LEFT JOIN `__PROJECT__.staging.stg_customers` c ON cf.UNIQUE_ID = c.UNIQUE_ID
 ),
 
 -- run predictions
 predictions AS (
     SELECT *
     FROM ML.PREDICT(
-        MODEL `fmn-sandbox.analytics.churn_classifier`,
+        MODEL `__PROJECT__.analytics.churn_classifier`,
         (SELECT * FROM model_input)
     )
 ),
@@ -122,4 +122,4 @@ SELECT
     c.income_group
 FROM scored s
 JOIN current_features cf ON s.UNIQUE_ID = cf.UNIQUE_ID
-LEFT JOIN `fmn-sandbox.staging.stg_customers` c ON s.UNIQUE_ID = c.UNIQUE_ID;
+LEFT JOIN `__PROJECT__.staging.stg_customers` c ON s.UNIQUE_ID = c.UNIQUE_ID;

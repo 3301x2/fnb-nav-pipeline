@@ -3,7 +3,7 @@
 -- recency is reversed so fewer days since last txn = higher score
 -- source: analytics.int_rfm_features -> analytics.int_rfm_scores
 
-CREATE OR REPLACE TABLE `fmn-sandbox.analytics.int_rfm_scores`
+CREATE OR REPLACE TABLE `__PROJECT__.analytics.int_rfm_scores`
 CLUSTER BY UNIQUE_ID
 AS
 
@@ -26,4 +26,4 @@ SELECT
         CAST(NTILE(5) OVER (ORDER BY val_trns ASC) AS STRING)
     )                                                              AS rfm_combined
 
-FROM `fmn-sandbox.analytics.int_rfm_features`;
+FROM `__PROJECT__.analytics.int_rfm_features`;

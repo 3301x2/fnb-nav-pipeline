@@ -1,7 +1,7 @@
 -- mart_demographic_summary.sql
 -- demographics of customers within each category, dashboard filters by category/client
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_demographic_summary`
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_demographic_summary`
 CLUSTER BY CATEGORY_TWO
 AS
 
@@ -22,11 +22,11 @@ FROM (
     SELECT UNIQUE_ID, CATEGORY_TWO,
            SUM(dest_txn_count)    AS category_txn_count,
            ROUND(SUM(dest_spend), 2) AS category_spend
-    FROM `fmn-sandbox.analytics.int_customer_category_spend`
+    FROM `__PROJECT__.analytics.int_customer_category_spend`
     GROUP BY UNIQUE_ID, CATEGORY_TWO
 ) cs
 
-LEFT JOIN `fmn-sandbox.staging.stg_customers` c
+LEFT JOIN `__PROJECT__.staging.stg_customers` c
     ON cs.UNIQUE_ID = c.UNIQUE_ID
 
 GROUP BY cs.CATEGORY_TWO, c.gender_label, c.age_group,

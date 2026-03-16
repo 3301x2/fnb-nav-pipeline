@@ -4,7 +4,7 @@
 -- churned = had txns in observation but zero in outcome period
 -- source: staging.stg_transactions, stg_customers -> analytics.churn_classifier
 
-CREATE OR REPLACE MODEL `fmn-sandbox.analytics.churn_classifier`
+CREATE OR REPLACE MODEL `__PROJECT__.analytics.churn_classifier`
 OPTIONS (
     model_type = 'LOGISTIC_REG',
     input_label_cols = ['churned'],
@@ -18,7 +18,7 @@ WITH date_bounds AS (
         MAX(EFF_DATE) AS max_date,
         DATE_SUB(MAX(EFF_DATE), INTERVAL 3 MONTH) AS outcome_start,
         DATE_SUB(MAX(EFF_DATE), INTERVAL 12 MONTH) AS obs_start
-    FROM `fmn-sandbox.staging.stg_transactions`
+    FROM `__PROJECT__.staging.stg_transactions`
 ),
 
 -- observation period features (months 1-9)
@@ -48,7 +48,7 @@ observation AS (
             NULLIF(COUNTIF(t.EFF_DATE < DATE_SUB((SELECT outcome_start FROM date_bounds), INTERVAL 6 MONTH)), 0)
         ), 2) AS txn_trend
 
-    FROM `fmn-sandbox.staging.stg_transactions` t
+    FROM `__PROJECT__.staging.stg_transactions` t
     CROSS JOIN date_bounds d
     WHERE t.EFF_DATE >= d.obs_start
       AND t.EFF_DATE < d.outcome_start
@@ -61,7 +61,7 @@ outcome AS (
     SELECT
         t.UNIQUE_ID,
         1 AS came_back
-    FROM `fmn-sandbox.staging.stg_transactions` t
+    FROM `__PROJECT__.staging.stg_transactions` t
     CROSS JOIN date_bounds d
     WHERE t.EFF_DATE >= d.outcome_start
     GROUP BY t.UNIQUE_ID
@@ -95,4 +95,4 @@ SELECT
     l.churned
 
 FROM labelled l
-LEFT JOIN `fmn-sandbox.staging.stg_customers` c ON l.UNIQUE_ID = c.UNIQUE_ID;
+LEFT JOIN `__PROJECT__.staging.stg_customers` c ON l.UNIQUE_ID = c.UNIQUE_ID;

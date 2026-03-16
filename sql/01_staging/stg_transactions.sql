@@ -3,7 +3,7 @@
 -- partitioned by month + clustered by category/destination for cost efficency
 -- source: customer_spend.transaction_data -> staging.stg_transactions
 
-CREATE OR REPLACE TABLE `fmn-sandbox.staging.stg_transactions`
+CREATE OR REPLACE TABLE `__PROJECT__.staging.stg_transactions`
 PARTITION BY DATE_TRUNC(EFF_DATE, MONTH)
 CLUSTER BY CATEGORY_TWO, DESTINATION
 AS
@@ -45,24 +45,24 @@ SELECT
     s.MUNICIPALITY,
     s.PROVINCE
 
-FROM `fmn-sandbox.customer_spend.transaction_data` t
+FROM `__PROJECT__.customer_spend.transaction_data` t
 
-LEFT JOIN `fmn-sandbox.spend_lookups.category_one_id` c1
+LEFT JOIN `__PROJECT__.spend_lookups.category_one_id` c1
     ON t.CATEGORY_ONE_ID = c1.CATEGORY_ONE_ID
 
-LEFT JOIN `fmn-sandbox.spend_lookups.category_two_id` c2
+LEFT JOIN `__PROJECT__.spend_lookups.category_two_id` c2
     ON t.CATEGORY_TWO_ID = c2.CATEGORY_TWO_ID
 
-LEFT JOIN `fmn-sandbox.spend_lookups.nav_category_id` nc
+LEFT JOIN `__PROJECT__.spend_lookups.nav_category_id` nc
     ON t.NAV_CATEGORY_ID = nc.NAV_CATEGORY_ID
 
-LEFT JOIN `fmn-sandbox.spend_lookups.destination_id` d
+LEFT JOIN `__PROJECT__.spend_lookups.destination_id` d
     ON t.DESTINATION_ID = d.DESTINATION_ID
 
-LEFT JOIN `fmn-sandbox.spend_lookups.location_id` l
+LEFT JOIN `__PROJECT__.spend_lookups.location_id` l
     ON CAST(t.LOCATION_ID AS INT64) = l.LOCATION_ID
 
-LEFT JOIN `fmn-sandbox.spend_lookups.suburb_id` s
+LEFT JOIN `__PROJECT__.spend_lookups.suburb_id` s
     ON CAST(t.SUBURB_ID AS INT64) = s.SUBURB_ID
 
 WHERE t.UNIQUE_ID IS NOT NULL

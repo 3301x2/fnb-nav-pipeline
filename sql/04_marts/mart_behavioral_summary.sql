@@ -1,7 +1,7 @@
 -- mart_behavioral_summary.sql
 -- shopping patterns per segment: when they shop, how diverse (5 rows)
 
-CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_behavioral_summary` AS
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_behavioral_summary` AS
 
 WITH txn_time AS (
     SELECT
@@ -12,7 +12,7 @@ WITH txn_time AS (
             WHEN t.trns_hour BETWEEN 17 AND 20 THEN 'Evening'
             ELSE 'Late Night'
         END                                                    AS time_slot
-    FROM `fmn-sandbox.staging.stg_transactions` t
+    FROM `__PROJECT__.staging.stg_transactions` t
 ),
 
 customer_patterns AS (
@@ -52,7 +52,7 @@ SELECT
     ROUND(AVG(co.avg_val), 2)                                  AS avg_txn_value,
     ROUND(SUM(cp.total_txns) * 1.0 / COUNT(*), 1)             AS avg_txns_per_customer
 
-FROM `fmn-sandbox.marts.mart_cluster_output` co
+FROM `__PROJECT__.marts.mart_cluster_output` co
 JOIN customer_patterns cp ON co.UNIQUE_ID = cp.UNIQUE_ID
 GROUP BY co.segment_name
 ORDER BY avg_txns_per_customer DESC;
