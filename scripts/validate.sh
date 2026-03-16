@@ -11,7 +11,7 @@ NC='\033[0m'
 
 echo "-- row counts --"
 bq query --use_legacy_sql=false --project_id="${PROJECT_ID}" --format=pretty "
-SELECT 'staging.stg_transactions' AS table_name, COUNT(*) AS rows FROM \`${PROJECT_ID}.staging.stg_transactions\`
+SELECT 'staging.stg_transactions' AS table_name, COUNT(*) AS row_count FROM \`${PROJECT_ID}.staging.stg_transactions\`
 UNION ALL SELECT 'staging.stg_customers', COUNT(*) FROM \`${PROJECT_ID}.staging.stg_customers\`
 UNION ALL SELECT 'analytics.int_rfm_features', COUNT(*) FROM \`${PROJECT_ID}.analytics.int_rfm_features\`
 UNION ALL SELECT 'analytics.int_rfm_scores', COUNT(*) FROM \`${PROJECT_ID}.analytics.int_rfm_scores\`
