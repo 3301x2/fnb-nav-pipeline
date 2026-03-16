@@ -32,9 +32,11 @@ current_features AS (
         COUNTIF(t.trns_dow NOT IN (1, 7)) AS NR_TRNS_WEEK,
         ROUND(COUNTIF(t.trns_hour BETWEEN 6 AND 10) * 100.0 / COUNT(*), 1) AS pct_morning,
         ROUND(COUNTIF(t.trns_hour BETWEEN 17 AND 21) * 100.0 / COUNT(*), 1) AS pct_evening,
+        -- txn_trend: matches training definition - recent 3m of observation vs first 3m
+        -- observation window is 9 months (start_date to max_date - 3m equivalent)
         COALESCE(ROUND(SAFE_DIVIDE(
             COUNTIF(t.EFF_DATE >= DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 3 MONTH)),
-            NULLIF(COUNTIF(t.EFF_DATE < DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 6 MONTH)), 0)
+            NULLIF(COUNTIF(t.EFF_DATE < DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 9 MONTH)), 0)
         ), 2), 0) AS txn_trend,
         DATE_DIFF((SELECT max_date FROM date_bounds), MAX(t.EFF_DATE), DAY) AS days_since_last,
         COUNTIF(t.EFF_DATE >= DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 3 MONTH)) AS txns_last_3m,

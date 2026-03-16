@@ -25,18 +25,22 @@ trend AS (
     GROUP BY t.CATEGORY_TWO
 ),
 
--- benchmarks aggregated per category
+-- benchmarks aggregated per category (true distinct customers, not sum of per-dest counts)
 cat_benchmarks AS (
     SELECT
-        CATEGORY_TWO,
-        COUNT(DISTINCT DESTINATION) AS num_destinations,
-        SUM(customers) AS total_customers,
-        SUM(total_spend) AS total_spend,
-        ROUND(AVG(avg_txn_value), 2) AS avg_txn_value,
-        ROUND(AVG(spend_per_customer), 0) AS avg_spend_per_customer,
-        MAX(DESTINATION) AS top_destination
-    FROM `__PROJECT__.marts.mart_destination_benchmarks`
-    GROUP BY CATEGORY_TWO
+        b.CATEGORY_TWO,
+        COUNT(DISTINCT b.DESTINATION) AS num_destinations,
+        ct.cat_total_customers AS total_customers,
+        SUM(b.total_spend) AS total_spend,
+        ROUND(AVG(b.avg_txn_value), 2) AS avg_txn_value,
+        ROUND(AVG(b.spend_per_customer), 0) AS avg_spend_per_customer
+    FROM `__PROJECT__.marts.mart_destination_benchmarks` b
+    JOIN (
+        SELECT CATEGORY_TWO, COUNT(DISTINCT UNIQUE_ID) AS cat_total_customers
+        FROM `__PROJECT__.analytics.int_customer_category_spend`
+        GROUP BY CATEGORY_TWO
+    ) ct ON b.CATEGORY_TWO = ct.CATEGORY_TWO
+    GROUP BY b.CATEGORY_TWO, ct.cat_total_customers
 ),
 
 -- top destination per category (by spend)

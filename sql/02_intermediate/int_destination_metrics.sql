@@ -22,12 +22,13 @@ WITH destination_agg AS (
     GROUP BY CATEGORY_TWO, DESTINATION
 ),
 
+-- true distinct customers per category (not sum of per-destination counts)
 category_totals AS (
     SELECT
         CATEGORY_TWO,
-        SUM(total_spend)    AS cat_total_spend,
-        SUM(customers)      AS cat_total_customers
-    FROM destination_agg
+        SUM(total_spend)                AS cat_total_spend,
+        COUNT(DISTINCT UNIQUE_ID)       AS cat_total_customers
+    FROM `__PROJECT__.analytics.int_customer_category_spend`
     GROUP BY CATEGORY_TWO
 )
 

@@ -9,7 +9,7 @@ WITH txn_time AS (
         CASE
             WHEN t.trns_hour BETWEEN 6  AND 10 THEN 'Morning'
             WHEN t.trns_hour BETWEEN 11 AND 16 THEN 'Afternoon'
-            WHEN t.trns_hour BETWEEN 17 AND 20 THEN 'Evening'
+            WHEN t.trns_hour BETWEEN 17 AND 21 THEN 'Evening'
             ELSE 'Late Night'
         END                                                    AS time_slot
     FROM `__PROJECT__.staging.stg_transactions` t

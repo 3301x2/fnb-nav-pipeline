@@ -1,8 +1,9 @@
--- mart_churn_risk.sql
--- customer level churn scoring, compares last 3m vs previous 3m
--- rule-based for now, ML version is in predict_churn.sql
+-- mart_churn_risk_rules.sql
+-- rule-based churn scoring, kept as a fallback/comparison to the ML version
+-- the ML version (predict_churn.sql) writes to marts.mart_churn_risk
+-- this one writes to a separate table so they dont collide
 
-CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_churn_risk`
+CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_churn_risk_rules`
 CLUSTER BY risk_level
 AS
 

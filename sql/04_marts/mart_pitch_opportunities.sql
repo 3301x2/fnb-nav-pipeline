@@ -72,13 +72,20 @@ SELECT
     COALESCE(dc.avg_churn_probability, 0) AS avg_churn_probability,
     COALESCE(dc.high_risk_customers, 0) AS high_risk_customers,
 
-    -- composite pitch score (higher = better opportunity)
-    -- weights: market size (30%), growth gap (30%), low churn (20%), spend efficiency (20%)
+    -- composite pitch score (0-100, higher = better opportunity)
+    -- all components normalized to 0-1 before weighting
     ROUND(
-        (SAFE_DIVIDE(c.category_total_spend, 1e9) * 30) +
-        (SAFE_DIVIDE(c.leader_market_share - b.market_share_pct, c.leader_market_share) * 30) +
+        -- market size: percentile rank across all categories (0-1)
+        (SAFE_DIVIDE(
+            RANK() OVER (ORDER BY c.category_total_spend ASC) - 1,
+            NULLIF(COUNT(*) OVER () - 1, 0)
+        ) * 30) +
+        -- growth gap: how far behind the leader (0 = leader, 1 = zero share)
+        (SAFE_DIVIDE(c.leader_market_share - b.market_share_pct, NULLIF(c.leader_market_share, 0)) * 30) +
+        -- low churn: 1 = no churn risk, 0 = certain churn
         ((1 - COALESCE(dc.avg_churn_probability, 0)) * 20) +
-        (LEAST(SAFE_DIVIDE(b.spend_per_customer, NULLIF(c.avg_spend_per_customer, 0)), 2) * 20)
+        -- spend efficiency: capped at 1 (at or above avg = full score)
+        (LEAST(SAFE_DIVIDE(b.spend_per_customer, NULLIF(c.avg_spend_per_customer, 0)), 1) * 20)
     , 2) AS pitch_score,
 
     -- recommended action
