@@ -50,7 +50,7 @@ def add_bullet(doc, text):
 
 def add_table(doc, headers, rows, col_widths=None):
     table = doc.add_table(rows=1 + len(rows), cols=len(headers))
-    table.style = 'Table Grid'
+    pass  # table style
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
     # Header row
