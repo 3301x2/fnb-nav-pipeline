@@ -306,6 +306,18 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
     run_sql "${SQL_DIR}/04_marts/mart_destination_benchmarks.sql" \
         "mart_destination_benchmarks (all destinations — dashboard anonymizes competitors)"
 
+    run_sql "${SQL_DIR}/04_marts/mart_cohort_retention.sql" \
+        "mart_cohort_retention (customer retention by signup cohort)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_category_affinity.sql" \
+        "mart_category_affinity (cross-category shopping patterns)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_category_scorecard.sql" \
+        "mart_category_scorecard (portfolio health overview)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_pitch_opportunities.sql" \
+        "mart_pitch_opportunities (ranked client pitch targets)"
+
     ok "Step 4 complete ($(elapsed ${STEP_START}))"
     echo ""
     echo "  ✅ Check BigQuery:"
