@@ -16,7 +16,8 @@ import plotly.graph_objects as go
 # -- config --
 
 PROJECT = "fmn-sandbox"
-client = bigquery.Client(project=PROJECT)
+LOCATION = "africa-south1"
+client = bigquery.Client(project=PROJECT, location=LOCATION)
 
 COLORS = ["#2E75B6", "#4CAF50", "#FF9800", "#E91E63", "#9C27B0",
           "#00BCD4", "#795548", "#607D8B"]
