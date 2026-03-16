@@ -1,13 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# ════════════════════════════════════════════════════════════════
-# Grant dashboard access to users listed in dashboards/viewers.txt
-#
-# Usage:
-#   bash scripts/grant_access.sh
-#   bash scripts/grant_access.sh production
-# ════════════════════════════════════════════════════════════════
+# grant dashboard access to users in dashboards/viewers.txt
+# bash scripts/grant_access.sh             -> sandbox
+# bash scripts/grant_access.sh production  -> production
 
 ENV="${1:-sandbox}"
 case "${ENV}" in
@@ -27,11 +23,11 @@ if [[ ! -f "${VIEWERS}" ]]; then
     exit 1
 fi
 
-echo "════════════════════════════════════════"
+echo "----------------------------------------"
 echo "  Granting dashboard access"
 echo "  Project: ${PROJECT}"
 echo "  Service: ${SERVICE}"
-echo "════════════════════════════════════════"
+echo "----------------------------------------"
 echo ""
 
 # Try public access first
@@ -75,11 +71,11 @@ if [[ ${COUNT} -eq 0 ]]; then
     echo "No emails found in dashboards/viewers.txt"
     echo "Add emails (one per line) and run again."
 else
-    echo "════════════════════════════════════════"
+    echo "----------------------------------------"
     echo "  Granted access to ${COUNT} user(s)"
     echo "  URL: $(gcloud run services describe ${SERVICE} --project ${PROJECT} --region ${REGION} --format='value(status.url)' 2>/dev/null || echo 'run: gcloud run services describe fnb-nav-dashboard')"
     echo ""
     echo "  Users will authenticate with their Google account"
     echo "  when they open the URL."
-    echo "════════════════════════════════════════"
+    echo "----------------------------------------"
 fi

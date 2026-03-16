@@ -1,14 +1,9 @@
-# ════════════════════════════════════════════════════════════════
-# Authorized dashboard viewers
-# ════════════════════════════════════════════════════════════════
-# Add one email per line. These users can access the Cloud Run dashboard.
-# Lines starting with # are ignored.
-#
-# After editing, run: bash scripts/grant_access.sh
-# ════════════════════════════════════════════════════════════════
+# authorized dashboard viewers
+# add one email per line, lines starting with # are ignored
+# after editing run: bash scripts/grant_access.sh
 
 # Speaker 1 (NAV team lead)
 # john.doe@fnb.co.za
 
-# Add team members below:
+# add team members below:
 

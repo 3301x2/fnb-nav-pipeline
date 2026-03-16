@@ -1,19 +1,13 @@
 """
 apply_template.py
-═══════════════════════════════════════════════════════════════
-Injects architecture content into the team's branded .docx template.
-Preserves headers, footers, logos, brand stripe, and all styles.
+injects architecture content into the teams branded .docx template
+preserves headers, footers, logos, brand stripe etc
 
-Usage:
+usage:
     python scripts/apply_template.py docs/template.docx executive
     python scripts/apply_template.py docs/template.docx technical
 
-Output:
-    docs/architecture_executive_branded.docx
-    docs/architecture_technical_branded.docx
-
-Requirements:
-    pip install python-docx
+requires: pip install python-docx
 """
 
 import sys
@@ -23,7 +17,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 
-# ── Helpers ────────────────────────────────────────────────────
+# -- helpers --
 
 def clear_body(doc):
     """Remove all paragraphs and tables from the body, keep headers/footers."""
@@ -109,9 +103,7 @@ def page_break(doc):
     run._r.append(br)
 
 
-# ══════════════════════════════════════════════════════════════
-# EXECUTIVE CONTENT
-# ══════════════════════════════════════════════════════════════
+# -- executive content --
 
 def build_executive(doc):
     clear_body(doc)
@@ -220,9 +212,7 @@ def build_executive(doc):
     add_para(doc, 'The solution is a four-layer SQL pipeline (staging \u2192 features \u2192 ML \u2192 dashboard tables) running on Google BigQuery in the fmn-sandbox project, africa-south1 region. Two BigQuery ML models are trained in-warehouse: k-means clustering for customer segmentation and logistic regression for churn prediction. All tables are partitioned and clustered for cost efficiency. Infrastructure is managed by Terraform (one-command teardown). The pipeline runs via a single shell script with step-by-step execution. Four Jupyter notebooks provide interactive exploration for the analytics team.')
 
 
-# ══════════════════════════════════════════════════════════════
-# TECHNICAL CONTENT
-# ══════════════════════════════════════════════════════════════
+# -- technical content --
 
 def build_technical(doc):
     clear_body(doc)
@@ -398,9 +388,7 @@ def build_technical(doc):
     )
 
 
-# ══════════════════════════════════════════════════════════════
-# MAIN
-# ══════════════════════════════════════════════════════════════
+# -- main --
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
