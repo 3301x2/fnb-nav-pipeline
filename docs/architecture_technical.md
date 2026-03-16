@@ -76,7 +76,7 @@ The pipeline uses raw SQL + bash scripts. It works, it scales, and it runs on pr
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Local Git repo: fnb-nav-pipeline (VS Code, not public)              │
 │                                                                      │
-│  bash scripts/run.sh 0 → 1 → 2 → 3 → 4 → 5                        │
+│  bash scripts/run.sh [sandbox|production] [0-5]                     │
 │                                                                      │
 │  ┌─────────────┐    ┌──────────────┐    ┌──────────────┐            │
 │  │ Raw data     │    │ Lookups      │    │ Demographics │            │
@@ -237,13 +237,14 @@ The pipeline follows a four-layer medallion architecture, executed sequentially 
 
 ### 3.2 Execution model
 
-The pipeline is executed via `bash scripts/run.sh` with step-by-step support:
+The pipeline is executed via `bash scripts/run.sh` with environment and step selection:
 
-- `bash scripts/run.sh` — runs all steps sequentially (0 through 5)
-- `bash scripts/run.sh 1` — runs staging only, prints verification queries
-- `bash scripts/run.sh 3` — runs ML models only (k-means + churn classifier)
+- `bash scripts/run.sh sandbox` — all steps on fmn-sandbox
+- `bash scripts/run.sh production 3` — step 3 (ML) on fmn-production
+- `bash scripts/run.sh sandbox 1` — staging only on fmn-sandbox
+- `bash scripts/run.sh 3` — step 3 on fmn-sandbox (default)
 
-Each step depends on the previous. Execution order is enforced by the script, not by a dependency graph.
+SQL files use a `__PROJECT__` placeholder. The runner substitutes the actual project ID at runtime so the same code targets sandbox or production. Each step depends on the previous. Execution order is enforced by the script, not by a dependency graph.
 
 ### 3.3 ML models
 
@@ -291,7 +292,7 @@ Dataform is BigQuery's native transformation framework. It wraps SQL in SQLX fil
 |--------|---------------------|----------|
 | **Table creation** | CREATE OR REPLACE TABLE in every .sql file | Dataform generates DDL from config block |
 | **Dependency management** | Enforced by script execution order (steps 0–5) | Automatic DAG from ref() function calls |
-| **Project ID** | Hardcoded in every SQL file (51 references) | Set once in dataform.json |
+| **Project ID** | `__PROJECT__` placeholder, substituted by run.sh | Set once in dataform.json |
 | **Incremental logic** | Custom DECLARE/IF/INSERT per file | Built-in is_incremental() macro |
 | **Data testing** | Separate validate.sh with manual checks | Native assertions: uniqueKey, nonNull, rowConditions |
 | **Scheduling** | Manual: bash scripts/run.sh | Built-in cron scheduling in GCP console |
@@ -381,8 +382,8 @@ SELECT ... FROM ${ref('raw_transaction_data')} t ...
 - `scripts/run.sh` — replaced by Dataform scheduler
 - `scripts/validate.sh` — replaced by assertions
 - `terraform/main.tf` — Dataform manages table creation
-- All CREATE OR REPLACE statements
-- All hardcoded project ID references (51 occurrences)
+- All CREATE OR REPLACE statements (Dataform generates DDL)
+- `__PROJECT__` placeholder logic in run.sh (Dataform handles project refs natively)
 
 ---
 
