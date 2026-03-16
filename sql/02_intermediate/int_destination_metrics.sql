@@ -26,7 +26,7 @@ WITH destination_agg AS (
 category_totals AS (
     SELECT
         CATEGORY_TWO,
-        SUM(total_spend)                AS cat_total_spend,
+        ROUND(SUM(dest_spend), 0)       AS cat_total_spend,
         COUNT(DISTINCT UNIQUE_ID)       AS cat_total_customers
     FROM `__PROJECT__.analytics.int_customer_category_spend`
     GROUP BY CATEGORY_TWO
