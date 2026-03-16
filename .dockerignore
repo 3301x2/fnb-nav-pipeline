@@ -1,0 +1,11 @@
+sql/
+notebooks/
+terraform/
+scripts/
+docs/
+.git/
+.gitignore
+*.md
+*.zip
+venv/
+__pycache__/
