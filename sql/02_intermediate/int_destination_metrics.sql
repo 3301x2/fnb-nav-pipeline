@@ -1,13 +1,7 @@
--- ════════════════════════════════════════════════════════════════
 -- int_destination_metrics.sql
--- ════════════════════════════════════════════════════════════════
--- Aggregates KPIs per destination within each category.
--- This powers the benchmarks page: the dashboard picks a client,
--- shows their numbers, and anonymizes competitors.
---
--- Source: analytics.int_customer_category_spend
--- Target: analytics.int_destination_metrics
--- ════════════════════════════════════════════════════════════════
+-- aggregates KPIs per destination within each category
+-- powers the benchmarks page on the dashboard
+-- source: analytics.int_customer_category_spend -> analytics.int_destination_metrics
 
 CREATE OR REPLACE TABLE `fmn-sandbox.analytics.int_destination_metrics`
 CLUSTER BY CATEGORY_TWO, DESTINATION
@@ -40,15 +34,15 @@ category_totals AS (
 SELECT
     d.*,
 
-    -- Market share within category
+    -- market share within category
     ROUND(d.total_spend * 100.0 / NULLIF(ct.cat_total_spend, 0), 2)
                                                                AS market_share_pct,
 
-    -- Customer penetration within category
+    -- customer penetration within category
     ROUND(d.customers * 100.0 / NULLIF(ct.cat_total_customers, 0), 2)
                                                                AS penetration_pct,
 
-    -- Rank within category (by spend)
+    -- rank within category by spend
     ROW_NUMBER() OVER (
         PARTITION BY d.CATEGORY_TWO
         ORDER BY d.total_spend DESC

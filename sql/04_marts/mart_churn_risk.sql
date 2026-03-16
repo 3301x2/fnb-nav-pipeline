@@ -1,8 +1,6 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_churn_risk.sql
--- Customer-level churn scoring: compares last 3 months vs
--- previous 3 months. Rule-based scoring (not ML — Phase 2).
--- ════════════════════════════════════════════════════════════════
+-- customer level churn scoring, compares last 3m vs previous 3m
+-- rule-based for now, ML version is in predict_churn.sql
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_churn_risk`
 CLUSTER BY risk_level
@@ -61,7 +59,7 @@ SELECT
         ELSE 'Stable'
     END                                                        AS risk_level,
 
-    -- Demographics
+    -- demographics
     c.age,
     c.gender_label,
     c.income_segment,

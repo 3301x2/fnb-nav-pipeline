@@ -1,18 +1,7 @@
--- ════════════════════════════════════════════════════════════════
 -- int_customer_category_spend.sql
--- ════════════════════════════════════════════════════════════════
--- For every customer, calculates their spend within each
--- CATEGORY_TWO — and their spend at each DESTINATION within
--- that category. This is the foundation for share-of-wallet
--- analysis at the dashboard level.
---
--- The dashboard picks a client (e.g. Adidas) and this table
--- already has: how much each customer spent at Adidas vs the
--- total Clothing & Apparel category. No re-running SQL needed.
---
--- Source: staging.stg_transactions
--- Target: analytics.int_customer_category_spend
--- ════════════════════════════════════════════════════════════════
+-- per customer spend within each category and destination
+-- this is the foundation for share-of-wallet analysis
+-- source: staging.stg_transactions -> analytics.int_customer_category_spend
 
 CREATE OR REPLACE TABLE `fmn-sandbox.analytics.int_customer_category_spend`
 PARTITION BY DATE_TRUNC(last_txn_date, MONTH)
@@ -26,7 +15,7 @@ WITH date_bounds AS (
     FROM `fmn-sandbox.staging.stg_transactions`
 ),
 
--- Per customer × destination within category
+-- per customer x destination within category
 customer_destination AS (
     SELECT
         t.UNIQUE_ID,
@@ -43,7 +32,7 @@ customer_destination AS (
     GROUP BY t.UNIQUE_ID, t.CATEGORY_TWO, t.DESTINATION
 ),
 
--- Per customer × category totals
+-- per customer x category totals
 customer_category AS (
     SELECT
         UNIQUE_ID,
@@ -64,8 +53,7 @@ SELECT
     cc.category_txn_count,
     cc.category_spend,
 
-    -- Share of wallet: what % of this customer's category spend
-    -- goes to this specific destination?
+    -- share of wallet: % of customer's category spend at this destination
     ROUND(SAFE_DIVIDE(cd.dest_spend, cc.category_spend) * 100, 1) AS share_of_wallet_pct
 
 FROM customer_destination cd

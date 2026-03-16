@@ -1,20 +1,7 @@
--- ════════════════════════════════════════════════════════════════
 -- stg_transactions.sql
--- ════════════════════════════════════════════════════════════════
--- Joins raw transaction_data with all lookup tables to produce
--- human-readable names. Strips PII (no email/phone). Partitioned
--- by month for cost efficiency on the 2.2B row production table.
---
--- Source:  customer_spend.transaction_data
--- Lookups: spend_lookups.category_one_id, category_two_id,
---          destination_id, location_id, suburb_id, nav_category_id
--- Target:  staging.stg_transactions
---
--- Partitioning: EFF_DATE (monthly) — queries filtering by date
---   only scan relevant partitions, not the full table.
--- Clustering: CATEGORY_TWO, DESTINATION — the two most common
---   filter columns in downstream queries.
--- ════════════════════════════════════════════════════════════════
+-- joins transaction_data with all lookup tables for human readable names
+-- partitioned by month + clustered by category/destination for cost efficency
+-- source: customer_spend.transaction_data -> staging.stg_transactions
 
 CREATE OR REPLACE TABLE `fmn-sandbox.staging.stg_transactions`
 PARTITION BY DATE_TRUNC(EFF_DATE, MONTH)
@@ -27,13 +14,13 @@ SELECT
     t.trns_amt,
     t.trns_time,
 
-    -- Time dimensions (pre-extracted for downstream use)
+    -- time dimensions extracted upfront
     EXTRACT(YEAR FROM t.EFF_DATE)                                  AS trns_year,
     EXTRACT(MONTH FROM t.EFF_DATE)                                 AS trns_month,
     EXTRACT(DAYOFWEEK FROM t.EFF_DATE)                             AS trns_dow,
     SAFE_CAST(LEFT(t.trns_time, 2) AS INT64)                      AS trns_hour,
 
-    -- Category hierarchy (resolved from IDs → names)
+    -- category hierarchy (IDs resolved to names)
     t.CATEGORY_ONE_ID,
     c1.CATEGORY_ONE,
     t.CATEGORY_TWO_ID,
@@ -41,13 +28,13 @@ SELECT
     t.NAV_CATEGORY_ID,
     nc.NAV_CATEGORY,
 
-    -- Destination (the actual shop / merchant)
+    -- destination (the actual merchant)
     t.DESTINATION_ID,
     d.DESTINATION,
     d.BUSINESS_CATEGORY_ONE,
     d.BUSINESS_CATEGORY_TWO,
 
-    -- Location and geography
+    -- location + geography
     CAST(t.LOCATION_ID AS INT64)                                   AS LOCATION_ID,
     l.LOCATION_NAME,
     l.X                                                            AS longitude,

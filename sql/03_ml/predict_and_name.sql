@@ -1,22 +1,7 @@
--- ════════════════════════════════════════════════════════════════
 -- predict_and_name.sql
--- ════════════════════════════════════════════════════════════════
--- Runs ML.PREDICT to assign every customer to a cluster, then
--- ranks clusters by average spend and assigns business names:
---
---   Rank 1 (highest spend)  → "Champions"
---   Rank 2                  → "Loyal High Value"
---   Rank 3                  → "Steady Mid-Tier"
---   Rank 4                  → "At Risk"
---   Rank 5 (lowest spend)   → "Dormant"
---
--- Also joins demographics from stg_customers so every row has
--- age, gender, income alongside the cluster assignment.
---
--- Source: analytics.kmeans_customer_segments (MODEL),
---         analytics.int_rfm_scores, staging.stg_customers
--- Target: marts.mart_cluster_output
--- ════════════════════════════════════════════════════════════════
+-- assigns every customer to a cluster then ranks by avg spend
+-- names them Champions -> Dormant, joins demographics too
+-- source: kmeans model + int_rfm_scores + stg_customers -> marts.mart_cluster_output
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_cluster_output`
 CLUSTER BY segment_name
@@ -59,7 +44,7 @@ SELECT
     n.cluster_id,
     n.segment_name,
 
-    -- RFM features
+    -- rfm features
     n.nr_trns,
     n.val_trns,
     n.avg_val,
@@ -71,7 +56,7 @@ SELECT
     n.mnthly_avg_val,
     n.days_between,
 
-    -- Temporal
+    -- temporal
     n.avg_dow,
     n.avg_hour,
     n.NR_TRNS_MORNING,
@@ -81,19 +66,19 @@ SELECT
     n.NR_TRNS_WEEKEND,
     n.NR_TRNS_WEEK,
 
-    -- Diversity
+    -- diversity
     n.active_nav_categories,
     n.active_destinations,
     n.active_suburbs,
     n.active_locations,
 
-    -- RFM scores
+    -- rfm scores
     n.r_score,
     n.f_score,
     n.m_score,
     n.rfm_combined,
 
-    -- Demographics (from staging)
+    -- demographics from staging
     c.gender,
     c.age,
     c.profile_age,

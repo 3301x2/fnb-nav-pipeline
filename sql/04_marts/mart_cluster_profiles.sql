@@ -1,8 +1,5 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_cluster_profiles.sql
--- One row per segment with averages, ranges, and demographics.
--- Expected: 5 rows
--- ════════════════════════════════════════════════════════════════
+-- one row per segment with averages, ranges, and demographics (5 rows)
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_cluster_profiles` AS
 
@@ -12,33 +9,33 @@ SELECT
     COUNT(*)                                                       AS customer_count,
     ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1)             AS pct_of_total,
 
-    -- Monetary
+    -- monetary
     ROUND(AVG(val_trns), 2)                                        AS avg_total_spend,
     ROUND(MIN(val_trns), 2)                                        AS min_total_spend,
     ROUND(MAX(val_trns), 2)                                        AS max_total_spend,
     ROUND(SUM(val_trns), 0)                                        AS total_segment_spend,
 
-    -- Frequency
+    -- frequency
     ROUND(AVG(nr_trns), 1)                                         AS avg_transactions,
     ROUND(AVG(mnthly_avg_nr), 1)                                   AS avg_monthly_txns,
 
-    -- Recency
+    -- recency
     ROUND(AVG(lst_trns_days), 1)                                   AS avg_recency_days,
     ROUND(AVG(days_between), 1)                                    AS avg_days_between_txns,
 
-    -- Transaction value
+    -- txn value
     ROUND(AVG(avg_val), 2)                                         AS avg_txn_value,
 
-    -- Diversity
+    -- diversity
     ROUND(AVG(active_destinations), 1)                             AS avg_merchants,
     ROUND(AVG(active_nav_categories), 1)                           AS avg_categories,
     ROUND(AVG(active_months), 1)                                   AS avg_active_months,
 
-    -- Temporal
+    -- temporal
     ROUND(AVG(NR_TRNS_WEEKEND), 1)                                 AS avg_weekend_txns,
     ROUND(AVG(NR_TRNS_WEEK), 1)                                    AS avg_weekday_txns,
 
-    -- Demographics
+    -- demographics
     ROUND(AVG(age), 1)                                             AS avg_age,
     ROUND(AVG(estimated_income), 0)                                AS avg_income,
     COUNTIF(age BETWEEN 18 AND 25)                                 AS age_18_25,

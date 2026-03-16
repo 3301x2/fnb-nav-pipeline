@@ -1,8 +1,5 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_monthly_trends.sql
--- Monthly spend per category × destination. The dashboard picks
--- a client and shows their trend vs category total.
--- ════════════════════════════════════════════════════════════════
+-- monthly spend per category x destination, dashboard shows client trend vs category
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_monthly_trends`
 PARTITION BY month

@@ -1,24 +1,7 @@
--- ════════════════════════════════════════════════════════════════
 -- stg_customers.sql
--- ════════════════════════════════════════════════════════════════
--- Deduplicates base_data (one row per customer, most recent month).
--- Renames all demo_* fields to human-readable names.
--- Creates pre-binned age_group and income_group for dashboards.
---
--- Source: customer_spend.base_data (82M+ rows, one per customer per month)
--- Target: staging.stg_customers (one row per customer)
---
--- Field mapping (from data dictionary):
---   demo_1 → gender        (0=Male, 1=Female)
---   demo_2 → age           (years)
---   demo_3 → profile_age   (years the profile has existed)
---   demo_4 → vertical_sales_index
---   demo_5 → income_segment (EW0, EB0, GLD, etc.)
---   demo_6 → hyper_segment  (Salaried, Self-employed, etc.)
---   demo_7 → estimated_income (smoothed credit turnover)
---   demo_8 → main_banked   (0/1 based on FNB rules)
---   demo_9 → credit_risk_class (PRISM score categories)
--- ════════════════════════════════════════════════════════════════
+-- deduplicates base_data to one row per customer (keeps most recent month)
+-- renames demo_* fields to readable names, adds pre-binned age/income groups
+-- source: customer_spend.base_data -> staging.stg_customers
 
 CREATE OR REPLACE TABLE `fmn-sandbox.staging.stg_customers`
 CLUSTER BY income_segment, gender
@@ -38,7 +21,7 @@ WITH ranked AS (
 SELECT
     UNIQUE_ID,
 
-    -- Demographics (renamed from demo_* to meaningful names)
+    -- demographics renamed from demo_*
     demo_1                                                         AS gender,
     demo_2                                                         AS age,
     demo_3                                                         AS profile_age,
@@ -49,7 +32,7 @@ SELECT
     demo_8                                                         AS main_banked,
     demo_9                                                         AS credit_risk_class,
 
-    -- Pre-binned groups (for dashboard filters and charts)
+    -- binned groups for the dashboard filters
     CASE
         WHEN demo_2 IS NULL THEN 'Unknown'
         WHEN demo_2 <= 25   THEN '18-25'

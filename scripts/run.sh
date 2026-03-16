@@ -1,36 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# ════════════════════════════════════════════════════════════════
-# FNB NAV Pipeline — Step-by-Step Build
-#
-# Usage:
-#   bash scripts/run.sh          → runs ALL steps (0-5)
-#   bash scripts/run.sh 0        → create datasets only
-#   bash scripts/run.sh 1        → staging only
-#   bash scripts/run.sh 2        → intermediate only
-#   bash scripts/run.sh 3        → ML model + predictions only
-#   bash scripts/run.sh 4        → marts only
-#   bash scripts/run.sh 5        → validation only
-#
-# Run them one at a time:
-#   bash scripts/run.sh 0   # check BigQuery → datasets exist
-#   bash scripts/run.sh 1   # check BigQuery → staging tables populated
-#   bash scripts/run.sh 2   # check BigQuery → analytics tables populated
-#   bash scripts/run.sh 3   # check BigQuery → ML model + cluster_output
-#   bash scripts/run.sh 4   # check BigQuery → all 8 mart tables
-#   bash scripts/run.sh 5   # validation report
-#
-# Or run everything:
-#   bash scripts/run.sh
-#
-# Prerequisites:
-#   - gcloud CLI authenticated (gcloud auth login)
-#   - bq CLI available
-#   - terraform installed (optional, for infra management)
-# ════════════════════════════════════════════════════════════════
+# FNB NAV pipeline runner
+# bash scripts/run.sh       -> runs all steps (0-5)
+# bash scripts/run.sh 1     -> runs just that step
+# needs gcloud + bq CLI authenticated
 
-# ── Configuration ──────────────────────────────────────────────
+# -- config --
 PROJECT_ID="${BQ_PROJECT_ID:-fmn-sandbox}"
 LOCATION="US"
 
@@ -43,7 +19,7 @@ STAGING_DATASET="staging"
 ANALYTICS_DATASET="analytics"
 MARTS_DATASET="marts"
 
-# ── Helpers ────────────────────────────────────────────────────
+# -- helpers --
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SQL_DIR="${REPO_ROOT}/sql"
@@ -79,17 +55,17 @@ elapsed() {
     echo "$((diff / 60))m $((diff % 60))s"
 }
 
-# ── Step argument ──────────────────────────────────────────────
+# -- step argument --
 STEP="${1:-all}"
 
-# ── Pre-flight checks ─────────────────────────────────────────
+# -- pre-flight checks --
 echo ""
-echo "════════════════════════════════════════════════════════════"
+echo "------------------------------------------------------------"
 echo "  FNB NAV Pipeline"
 echo "  Project: ${PROJECT_ID}"
 echo "  Step:    ${STEP}"
 echo "  Started: $(date)"
-echo "════════════════════════════════════════════════════════════"
+echo "------------------------------------------------------------"
 echo ""
 
 command -v bq >/dev/null 2>&1 || fail "bq CLI not found. Install: gcloud components install bq"
@@ -97,9 +73,7 @@ log "Pre-flight checks passed"
 PIPELINE_START=$(date +%s)
 
 
-# ══════════════════════════════════════════════════════════════
-# STEP 0: Create datasets
-# ══════════════════════════════════════════════════════════════
+# -- step 0: create datasets --
 if [[ "${STEP}" == "all" || "${STEP}" == "0" ]]; then
     log "STEP 0: Creating datasets..."
     for ds in "${STAGING_DATASET}" "${ANALYTICS_DATASET}" "${MARTS_DATASET}"; do
@@ -117,10 +91,7 @@ if [[ "${STEP}" == "all" || "${STEP}" == "0" ]]; then
 fi
 
 
-# ══════════════════════════════════════════════════════════════
-# STEP 1: Staging
-# Creates: staging.stg_transactions, staging.stg_customers
-# ══════════════════════════════════════════════════════════════
+# -- step 1: staging (stg_transactions, stg_customers) --
 if [[ "${STEP}" == "all" || "${STEP}" == "1" ]]; then
     log "STEP 1: Staging layer"
     log "  → stg_transactions: joins all 6 lookup tables, strips PII"
@@ -147,12 +118,7 @@ if [[ "${STEP}" == "all" || "${STEP}" == "1" ]]; then
 fi
 
 
-# ══════════════════════════════════════════════════════════════
-# STEP 2: Intermediate
-# Creates: analytics.int_rfm_features, int_rfm_scores,
-#          int_customer_category_spend, int_destination_metrics
-# Depends: Step 1 (staging tables must exist)
-# ══════════════════════════════════════════════════════════════
+# -- step 2: intermediate (rfm features, scores, spend, metrics) --
 if [[ "${STEP}" == "all" || "${STEP}" == "2" ]]; then
     log "STEP 2: Intermediate layer"
     log "  → int_rfm_features: 20+ behavioral features per customer"
@@ -188,20 +154,7 @@ if [[ "${STEP}" == "all" || "${STEP}" == "2" ]]; then
 fi
 
 
-# ══════════════════════════════════════════════════════════════
-# STEP 3: ML Models
-# Creates: analytics.kmeans_customer_segments (MODEL),
-#          analytics.churn_classifier (MODEL),
-#          marts.mart_cluster_output (TABLE),
-#          marts.mart_churn_risk (TABLE)
-# Depends: Step 2 (int_rfm_scores must exist)
-#
-# ⚠️  This step takes ~5-10 minutes:
-#   - train_model.sql: k-means clustering (~60-120s)
-#   - predict_and_name.sql: cluster assignment (~30s)
-#   - train_churn_model.sql: boosted tree classifier (~3-5 min)
-#   - predict_churn.sql: churn probability scoring (~1-2 min)
-# ══════════════════════════════════════════════════════════════
+# -- step 3: ML models (kmeans + churn, takes ~5-10 min) --
 if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
     log "STEP 3: ML layer (2 models)"
     log "  → K-means customer segmentation"
@@ -242,11 +195,7 @@ if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
 fi
 
 
-# ══════════════════════════════════════════════════════════════
-# STEP 4: Marts
-# Creates: 8 mart tables (dashboard-ready)
-# Depends: Steps 1-3 (all upstream tables + model must exist)
-# ══════════════════════════════════════════════════════════════
+# -- step 4: marts (8 dashboard-ready tables) --
 if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
     log "STEP 4: Mart layer (7 tables — churn already built in step 3)"
     STEP_START=$(date +%s)
@@ -291,9 +240,7 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
 fi
 
 
-# ══════════════════════════════════════════════════════════════
-# STEP 5: Validation
-# ══════════════════════════════════════════════════════════════
+# -- step 5: validation --
 if [[ "${STEP}" == "all" || "${STEP}" == "5" ]]; then
     log "STEP 5: Validation"
     bash "${SCRIPT_DIR}/validate.sh" "${PROJECT_ID}"
@@ -305,10 +252,10 @@ if [[ "${STEP}" == "all" || "${STEP}" == "5" ]]; then
 fi
 
 
-# ── Summary (only when running all) ──────────────────────────
+# -- summary (only when running all) --
 if [[ "${STEP}" == "all" ]]; then
     echo ""
-    echo "════════════════════════════════════════════════════════════"
+    echo "------------------------------------------------------------"
     echo "  Pipeline complete — $(elapsed ${PIPELINE_START})"
     echo "  Project: ${PROJECT_ID}"
     echo "  Finished: $(date)"
@@ -316,5 +263,5 @@ if [[ "${STEP}" == "all" ]]; then
     echo "  Next steps:"
     echo "    pip install -r dashboards/requirements.txt"
     echo "    streamlit run dashboards/app.py"
-    echo "════════════════════════════════════════════════════════════"
+    echo "------------------------------------------------------------"
 fi

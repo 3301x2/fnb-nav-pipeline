@@ -1,8 +1,5 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_demographic_summary.sql
--- Demographics of customers within each category. The dashboard
--- filters by category and optionally by destination (client).
--- ════════════════════════════════════════════════════════════════
+-- demographics of customers within each category, dashboard filters by category/client
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_demographic_summary`
 CLUSTER BY CATEGORY_TWO
@@ -21,7 +18,7 @@ SELECT
     ROUND(AVG(cs.category_spend), 0)                           AS avg_spend_per_customer
 
 FROM (
-    -- Deduplicate to one row per customer per category
+    -- dedup to one row per customer per category
     SELECT UNIQUE_ID, CATEGORY_TWO,
            SUM(dest_txn_count)    AS category_txn_count,
            ROUND(SUM(dest_spend), 2) AS category_spend

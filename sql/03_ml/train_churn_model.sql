@@ -1,37 +1,8 @@
--- ════════════════════════════════════════════════════════════════
 -- train_churn_model.sql
--- ════════════════════════════════════════════════════════════════
--- Trains a supervised ML model to predict customer churn.
---
--- APPROACH:
---   We split history into two windows:
---   - "observation period": 9 months of behavior data (features)
---   - "outcome period": last 3 months (did they come back or not?)
---
---   A customer is labelled "churned" (1) if they had transactions
---   in the observation period but ZERO in the outcome period.
---
---   The model learns which behavioral patterns (declining frequency,
---   fewer merchants, shifting time-of-day) predict churn.
---
--- MODEL: BOOSTED_TREE_CLASSIFIER (gradient boosted decision tree)
---   - Handles non-linear relationships
---   - Provides feature importance
---   - Auto train/test split (80/20)
---   - Outputs probability scores (0.0 to 1.0)
---
--- FEATURES (15):
---   From RFM: val_trns, nr_trns, avg_val, active_months, days_between,
---             active_destinations, active_nav_categories,
---             NR_TRNS_WEEKEND, NR_TRNS_WEEK
---   Temporal: pct_morning, pct_evening
---   Trend:    txn_trend (recent 3m vs prior 3m ratio within observation)
---   Demo:     age, estimated_income, main_banked
---
--- Source: staging.stg_transactions, staging.stg_customers
--- Target: analytics.churn_classifier (MODEL)
--- Runtime: ~3-5 minutes on production data
--- ════════════════════════════════════════════════════════════════
+-- logistic regression to predict churn based on 15 features
+-- splits history into 9mo observation + 3mo outcome window
+-- churned = had txns in observation but zero in outcome period
+-- source: staging.stg_transactions, stg_customers -> analytics.churn_classifier
 
 CREATE OR REPLACE MODEL `fmn-sandbox.analytics.churn_classifier`
 OPTIONS (
@@ -50,7 +21,7 @@ WITH date_bounds AS (
     FROM `fmn-sandbox.staging.stg_transactions`
 ),
 
--- Observation period features (months 1-9)
+-- observation period features (months 1-9)
 observation AS (
     SELECT
         t.UNIQUE_ID,
@@ -67,12 +38,11 @@ observation AS (
         COUNTIF(t.trns_dow IN (1, 7)) AS NR_TRNS_WEEKEND,
         COUNTIF(t.trns_dow NOT IN (1, 7)) AS NR_TRNS_WEEK,
 
-        -- Time-of-day percentages
+        -- time of day %
         ROUND(COUNTIF(t.trns_hour BETWEEN 6 AND 10) * 100.0 / COUNT(*), 1) AS pct_morning,
         ROUND(COUNTIF(t.trns_hour BETWEEN 17 AND 21) * 100.0 / COUNT(*), 1) AS pct_evening,
 
-        -- Trend: ratio of transactions in last 3 months of observation
-        -- vs first 3 months. A declining trend signals pre-churn behavior.
+        -- trend: recent 3m vs prior 3m txn ratio, declining = pre-churn
         ROUND(SAFE_DIVIDE(
             COUNTIF(t.EFF_DATE >= DATE_SUB((SELECT outcome_start FROM date_bounds), INTERVAL 3 MONTH)),
             NULLIF(COUNTIF(t.EFF_DATE < DATE_SUB((SELECT outcome_start FROM date_bounds), INTERVAL 6 MONTH)), 0)
@@ -86,7 +56,7 @@ observation AS (
     HAVING COUNT(*) >= 3
 ),
 
--- Outcome: did they transact in the last 3 months?
+-- outcome: did they transact in last 3 months?
 outcome AS (
     SELECT
         t.UNIQUE_ID,
@@ -97,7 +67,7 @@ outcome AS (
     GROUP BY t.UNIQUE_ID
 ),
 
--- Label: churned = was active in observation but did NOT come back
+-- label: active in observation but didnt come back = churned
 labelled AS (
     SELECT
         o.*,

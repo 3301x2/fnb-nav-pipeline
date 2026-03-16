@@ -1,17 +1,7 @@
--- ════════════════════════════════════════════════════════════════
 -- predict_churn.sql
--- ════════════════════════════════════════════════════════════════
--- Scores every active customer with ML churn probability.
--- Replaces the rule-based mart_churn_risk.
---
--- Each customer gets:
---   - churn_probability (0.0 to 1.0)
---   - churn_risk_level (Critical / High / Medium / Low / Stable)
---
--- Source: analytics.churn_classifier (MODEL),
---         staging.stg_transactions, staging.stg_customers
--- Target: marts.mart_churn_risk
--- ════════════════════════════════════════════════════════════════
+-- scores every active customer with ML churn probability
+-- outputs churn_probability (0-1) and risk level (Critical to Stable)
+-- source: churn_classifier model + stg_transactions + stg_customers
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_churn_risk`
 CLUSTER BY churn_risk_level
@@ -24,7 +14,7 @@ WITH date_bounds AS (
     FROM `fmn-sandbox.staging.stg_transactions`
 ),
 
--- Build current features (same shape as training data)
+-- build current features (same shape as training data)
 current_features AS (
     SELECT
         t.UNIQUE_ID,
@@ -59,7 +49,7 @@ current_features AS (
     HAVING COUNT(*) >= 3
 ),
 
--- Model input (features only, matching training schema)
+-- model input (features only, matching training schema)
 model_input AS (
     SELECT
         cf.UNIQUE_ID,
@@ -82,7 +72,7 @@ model_input AS (
     LEFT JOIN `fmn-sandbox.staging.stg_customers` c ON cf.UNIQUE_ID = c.UNIQUE_ID
 ),
 
--- Run predictions
+-- run predictions
 predictions AS (
     SELECT *
     FROM ML.PREDICT(
@@ -91,7 +81,7 @@ predictions AS (
     )
 ),
 
--- Extract probability
+-- extract probability
 scored AS (
     SELECT
         p.UNIQUE_ID,

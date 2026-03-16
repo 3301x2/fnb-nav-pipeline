@@ -1,8 +1,5 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_geo_summary.sql
--- Spend by province × municipality with category breakdown.
--- Dashboard filters this by category for client-specific geo views.
--- ════════════════════════════════════════════════════════════════
+-- spend by province x municipality with category breakdown for geo views
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_geo_summary`
 CLUSTER BY PROVINCE, CATEGORY_TWO

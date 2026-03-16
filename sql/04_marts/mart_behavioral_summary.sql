@@ -1,8 +1,5 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_behavioral_summary.sql
--- Shopping patterns per segment: when they shop, how diverse.
--- Expected: 5 rows
--- ════════════════════════════════════════════════════════════════
+-- shopping patterns per segment: when they shop, how diverse (5 rows)
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_behavioral_summary` AS
 
@@ -34,7 +31,7 @@ SELECT
     co.segment_name,
     COUNT(*)                                                   AS customers,
 
-    -- Time of day distribution
+    -- time of day distribution
     ROUND(SUM(cp.morning_txns) * 100.0 /
         NULLIF(SUM(cp.total_txns), 0), 1)                     AS pct_morning,
     ROUND(SUM(cp.afternoon_txns) * 100.0 /
@@ -44,12 +41,12 @@ SELECT
     ROUND(SUM(cp.late_night_txns) * 100.0 /
         NULLIF(SUM(cp.total_txns), 0), 1)                     AS pct_late_night,
 
-    -- Weekend ratio
+    -- weekend ratio
     ROUND(SUM(co.NR_TRNS_WEEKEND) * 100.0 /
         NULLIF(SUM(co.NR_TRNS_WEEKEND + co.NR_TRNS_WEEK), 0), 1)
                                                                AS pct_weekend,
 
-    -- Diversity
+    -- diversity
     ROUND(AVG(co.active_nav_categories), 1)                    AS avg_categories,
     ROUND(AVG(co.active_destinations), 1)                      AS avg_merchants,
     ROUND(AVG(co.avg_val), 2)                                  AS avg_txn_value,

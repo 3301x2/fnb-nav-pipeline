@@ -1,8 +1,5 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_cluster_summary.sql
--- Business-friendly summary: descriptions + actions per segment.
--- Expected: 5 rows
--- ════════════════════════════════════════════════════════════════
+-- business friendly summary with descriptions and recomended actions per segment (5 rows)
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_cluster_summary` AS
 

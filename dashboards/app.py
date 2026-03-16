@@ -1,8 +1,7 @@
 """
-FNB NAV — Data Insights Dashboard
-══════════════════════════════════
-Client selection happens HERE, not in SQL.
-Pick a category → pick a client → all pages filter live.
+FNB NAV - Data Insights Dashboard
+Client selection happens here not in SQL.
+Pick a category, pick a client, everything filters live.
 Competitors auto-anonymize.
 
 Run: streamlit run dashboards/app.py
@@ -14,9 +13,7 @@ from google.cloud import bigquery
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ═══════════════════════════════════════════════════════════════
-# CONFIG
-# ═══════════════════════════════════════════════════════════════
+# -- config --
 
 PROJECT = "fmn-sandbox"
 client = bigquery.Client(project=PROJECT)
@@ -50,9 +47,7 @@ def format_rand(val):
     return f"R{val:,.0f}"
 
 
-# ═══════════════════════════════════════════════════════════════
-# LAYOUT + SIDEBAR
-# ═══════════════════════════════════════════════════════════════
+# -- layout + sidebar --
 
 st.set_page_config(page_title="FNB NAV — Data Insights", page_icon="📊", layout="wide")
 st.markdown("""<style>
@@ -64,7 +59,7 @@ st.sidebar.title("NAV Data Platform")
 st.sidebar.markdown(f"**Project:** `{PROJECT}`")
 st.sidebar.markdown("---")
 
-# ── Client selection (the core feature) ───────────────────────
+# -- client selection (the core feature) --
 st.sidebar.subheader("Client Configuration")
 
 try:
@@ -122,9 +117,7 @@ page = st.sidebar.radio("Navigate", [
 ])
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 1: EXECUTIVE SUMMARY
-# ═══════════════════════════════════════════════════════════════
+# -- page 1: executive summary --
 
 if page == "📊 Executive Summary":
     st.title("Executive Summary")
@@ -183,9 +176,7 @@ if page == "📊 Executive Summary":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 2: CUSTOMER SEGMENTS
-# ═══════════════════════════════════════════════════════════════
+# -- page 2: customer segments --
 
 elif page == "👥 Customer Segments":
     st.title("Customer Segments")
@@ -253,9 +244,7 @@ elif page == "👥 Customer Segments":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 3: SPEND SHARE
-# ═══════════════════════════════════════════════════════════════
+# -- page 3: spend share --
 
 elif page == "💰 Spend Share":
     st.title("Spend Share Analysis")
@@ -327,9 +316,7 @@ elif page == "💰 Spend Share":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 4: DEMOGRAPHICS
-# ═══════════════════════════════════════════════════════════════
+# -- page 4: demographics --
 
 elif page == "🧬 Demographics":
     st.title("Demographic Breakdown")
@@ -378,9 +365,7 @@ elif page == "🧬 Demographics":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 5: TRENDS
-# ═══════════════════════════════════════════════════════════════
+# -- page 5: trends --
 
 elif page == "📈 Trends":
     st.title("Spend Trends")
@@ -442,9 +427,7 @@ elif page == "📈 Trends":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 6: BEHAVIORAL
-# ═══════════════════════════════════════════════════════════════
+# -- page 6: behavioral --
 
 elif page == "🕐 Behavioral":
     st.title("Behavioral Insights")
@@ -498,9 +481,7 @@ elif page == "🕐 Behavioral":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 7: GEO
-# ═══════════════════════════════════════════════════════════════
+# -- page 7: geo --
 
 elif page == "🗺️ Geo Insights":
     st.title("Geographic Insights")
@@ -552,9 +533,7 @@ elif page == "🗺️ Geo Insights":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 8: CHURN RISK
-# ═══════════════════════════════════════════════════════════════
+# -- page 8: churn risk --
 
 elif page == "⚠️ Churn Risk":
     st.title("Churn Risk Analysis")
@@ -665,9 +644,7 @@ elif page == "⚠️ Churn Risk":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 9: BENCHMARKS (auto-anonymization)
-# ═══════════════════════════════════════════════════════════════
+# -- page 9: benchmarks (auto-anonymization) --
 
 elif page == "📊 Benchmarks":
     st.title("Competitive Benchmarks")
@@ -685,7 +662,7 @@ elif page == "📊 Benchmarks":
         """)
 
         if not bench.empty:
-            # ── Auto-anonymization logic ──
+            # auto-anonymization logic
             client_row = bench[bench["DESTINATION"] == selected_client].copy()
             competitors = bench[bench["DESTINATION"] != selected_client].head(top_n_competitors).copy()
 
@@ -758,9 +735,7 @@ elif page == "📊 Benchmarks":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 10: ROI SIMULATOR
-# ═══════════════════════════════════════════════════════════════
+# -- page 10: roi simulator --
 
 elif page == "💡 ROI Simulator":
     st.title("ROI Simulator")
@@ -817,9 +792,7 @@ elif page == "💡 ROI Simulator":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 11: ML EVALUATION
-# ═══════════════════════════════════════════════════════════════
+# -- page 11: ml evaluation --
 
 elif page == "🤖 ML Evaluation":
     st.title("ML Model Evaluation")
@@ -968,9 +941,7 @@ elif page == "🤖 ML Evaluation":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# PAGE 12: DATA HEALTH
-# ═══════════════════════════════════════════════════════════════
+# -- page 12: data health --
 
 elif page == "🏥 Data Health":
     st.title("Data Health Check")
@@ -1011,9 +982,7 @@ elif page == "🏥 Data Health":
         st.error(f"Query failed: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════
-# FOOTER
-# ═══════════════════════════════════════════════════════════════
+# -- footer --
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("**FNB NAV Data Platform**")

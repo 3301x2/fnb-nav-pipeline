@@ -1,18 +1,6 @@
-# ════════════════════════════════════════════════════════════════
-# FNB NAV Pipeline — Terraform Configuration
-#
-# Creates all BigQuery datasets and table shells.
-# The SQL pipeline populates the tables with data.
-#
-# Usage:
-#   terraform init
-#   terraform plan
-#   terraform apply     → creates everything
-#   terraform destroy   → wipes everything clean
-#
-# This is the "one shot destroy" that was discussed:
-#   "If he needs changes I can just destroy everything."
-# ════════════════════════════════════════════════════════════════
+# terraform config for the FNB NAV pipeline
+# creates all BigQuery datasets and table shells, SQL pipeline populates them
+# terraform apply to create, terraform destroy to wipe everthing clean
 
 terraform {
   required_version = ">= 1.0"
@@ -24,7 +12,7 @@ terraform {
   }
 }
 
-# ── Variables ──────────────────────────────────────────────────
+# -- variables --
 
 variable "project_id" {
   description = "GCP project ID"
@@ -44,13 +32,13 @@ variable "pipeline_enabled" {
   default     = true
 }
 
-# ── Provider ───────────────────────────────────────────────────
+# -- provider --
 
 provider "google" {
   project = var.project_id
 }
 
-# ── Datasets ───────────────────────────────────────────────────
+# -- datasets --
 
 resource "google_bigquery_dataset" "staging" {
   count       = var.pipeline_enabled ? 1 : 0
@@ -97,7 +85,7 @@ resource "google_bigquery_dataset" "marts" {
   delete_contents_on_destroy = true
 }
 
-# ── Staging Tables ─────────────────────────────────────────────
+# -- staging tables --
 
 resource "google_bigquery_table" "stg_transactions" {
   count               = var.pipeline_enabled ? 1 : 0
@@ -134,7 +122,7 @@ resource "google_bigquery_table" "stg_customers" {
   }
 }
 
-# ── Analytics Tables ───────────────────────────────────────────
+# -- analytics tables --
 
 resource "google_bigquery_table" "int_rfm_features" {
   count               = var.pipeline_enabled ? 1 : 0
@@ -196,7 +184,7 @@ resource "google_bigquery_table" "int_destination_metrics" {
   }
 }
 
-# ── Mart Tables ────────────────────────────────────────────────
+# -- mart tables --
 
 resource "google_bigquery_table" "mart_cluster_output" {
   count               = var.pipeline_enabled ? 1 : 0
@@ -333,7 +321,7 @@ resource "google_bigquery_table" "mart_destination_benchmarks" {
   }
 }
 
-# ── Outputs ────────────────────────────────────────────────────
+# -- outputs --
 
 output "datasets" {
   description = "Created datasets"

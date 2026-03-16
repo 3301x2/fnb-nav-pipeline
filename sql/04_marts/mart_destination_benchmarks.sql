@@ -1,15 +1,6 @@
--- ════════════════════════════════════════════════════════════════
 -- mart_destination_benchmarks.sql
--- Every destination's KPIs within its category. The dashboard
--- picks a client → shows them by name, anonymizes the rest as
--- "Competitor 1", "Competitor 2", etc.
---
--- This is the table that solves the meeting ask:
---   "This week we meet with Adidas, next week with Nike.
---    Instead of recoding everything..."
---
--- Now: just pick from a dropdown. SQL never changes.
--- ════════════════════════════════════════════════════════════════
+-- every destination's KPIs within its category
+-- dashboard picks a client, shows them by name, anonymises the rest as competitors
 
 CREATE OR REPLACE TABLE `fmn-sandbox.marts.mart_destination_benchmarks`
 CLUSTER BY CATEGORY_TWO

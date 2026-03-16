@@ -1,9 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# ════════════════════════════════════════════════════════════════
-# Pipeline Validation — Row counts + data quality checks
-# ════════════════════════════════════════════════════════════════
+# pipeline validation - row counts + data quality checks
 
 PROJECT_ID="${1:-fmn-sandbox}"
 
@@ -11,7 +9,7 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo "── Row Counts ──────────────────────────────────────────"
+echo "-- row counts --"
 bq query --use_legacy_sql=false --project_id="${PROJECT_ID}" --format=pretty "
 SELECT 'staging.stg_transactions' AS table_name, COUNT(*) AS rows FROM \`${PROJECT_ID}.staging.stg_transactions\`
 UNION ALL SELECT 'staging.stg_customers', COUNT(*) FROM \`${PROJECT_ID}.staging.stg_customers\`
@@ -32,7 +30,7 @@ ORDER BY table_name
 "
 
 echo ""
-echo "── Data Quality Checks ─────────────────────────────────"
+echo "-- data quality checks --"
 RESULT=$(bq query --use_legacy_sql=false --project_id="${PROJECT_ID}" --format=csv "
 SELECT
     'Cluster profiles = 5 segments' AS check_name,
@@ -61,4 +59,4 @@ echo "${RESULT}" | while IFS=, read -r check status; do
 done
 
 echo ""
-echo "── Validation complete ────────────────────────────────"
+echo "-- validation complete --"
