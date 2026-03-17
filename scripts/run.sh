@@ -49,7 +49,7 @@ case "${ENV}" in
         ;;
     *)
         # If first arg looks like a step number, assume sandbox
-        if [[ "${ENV}" =~ ^[0-5]$|^all$ ]]; then
+        if [[ "${ENV}" =~ ^[0-6]$|^all$ ]]; then
             STEP="${ENV}"
             PROJECT_ID="fmn-sandbox"
             ENV="sandbox"
@@ -375,8 +375,8 @@ if [[ "${STEP}" == "all" ]]; then
     echo "  Finished: $(date)"
     echo ""
     echo "  Next steps:"
-    echo "    pip install -r dashboards/requirements.txt"
-    echo "    streamlit run dashboards/app.py"
+    echo "    bash scripts/generate_report.sh    # generate insights report"
+    echo "    streamlit run dashboards/app.py     # launch dashboard (local)"
     echo "════════════════════════════════════════════════════════════"
 fi
 

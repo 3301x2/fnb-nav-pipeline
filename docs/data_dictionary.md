@@ -128,3 +128,98 @@ Every destination's KPIs within its category. Dashboard anonymizes competitors.
 | market_share_pct | FLOAT | % of category spend |
 | penetration_pct | FLOAT | % of category customers |
 | spend_rank | INTEGER | Rank within category |
+
+### marts.mart_cohort_retention
+Customer retention rates by signup cohort month.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| cohort_month | DATE | Month of customer's first transaction |
+| cohort_size | INTEGER | Number of customers in the cohort |
+| months_since_first | INTEGER | Months elapsed since cohort start |
+| retention_pct | FLOAT | Percentage of cohort still active |
+
+### marts.mart_category_affinity
+Cross-category shopping patterns with lift and similarity metrics.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| category_a | STRING | First category in the pair |
+| category_b | STRING | Second category in the pair |
+| shared_customers | INTEGER | Customers who shop in both categories |
+| lift | FLOAT | Lift score (observed / expected co-occurrence) |
+| jaccard_pct | FLOAT | Jaccard similarity as a percentage |
+
+### marts.mart_category_scorecard
+Portfolio health overview per category.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| CATEGORY_TWO | STRING | Category name |
+| total_spend | FLOAT | Total spend across all customers |
+| growth_pct | FLOAT | Period-over-period spend growth percentage |
+| health_status | STRING | Category health label (Growing, Stable, Declining) |
+
+### marts.mart_pitch_opportunities
+Ranked client pitch targets with scores and recommended actions.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| DESTINATION | STRING | Client / merchant name |
+| CATEGORY_TWO | STRING | Category the client operates in |
+| pitch_score | FLOAT | Composite score ranking pitch attractiveness |
+| recommended_action | STRING | Suggested pitch action |
+| addressable_market | FLOAT | Estimated addressable market in Rands |
+
+### marts.mart_churn_explained
+ML.EXPLAIN_PREDICT output — top reasons for each customer's churn risk.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| UNIQUE_ID | STRING | Customer identifier |
+| churn_probability | FLOAT | Predicted probability of churn (0-1) |
+| reason_1 | STRING | Top contributing factor to churn risk |
+| reason_2 | STRING | Second contributing factor |
+| reason_3 | STRING | Third contributing factor |
+
+### marts.mart_spend_momentum
+Spend acceleration/deceleration per customer with urgency scoring.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| UNIQUE_ID | STRING | Customer identifier |
+| momentum_status | STRING | Accelerating, Stable, or Decelerating |
+| spend_change_pct | FLOAT | Period-over-period spend change percentage |
+| urgency_score | FLOAT | Urgency score for intervention prioritization |
+
+### marts.mart_category_propensity
+Next category adoption predictions per segment.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| segment_name | STRING | Customer segment |
+| CATEGORY_TWO | STRING | Category name |
+| adoption_rate_pct | FLOAT | Current adoption rate within the segment |
+| potential_revenue | FLOAT | Estimated revenue if adoption increases |
+| propensity_level | STRING | High, Medium, or Low propensity |
+
+### marts.mart_customer_clv
+Predicted customer lifetime value with tiers.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| UNIQUE_ID | STRING | Customer identifier |
+| predicted_clv | FLOAT | Predicted lifetime value in Rands |
+| clv_tier | STRING | Tier label (Platinum, Gold, Silver, Bronze) |
+| historical_spend | FLOAT | Total historical spend used as model input |
+
+### analytics.clv_predictor
+BigQuery ML linear regression model for customer lifetime value prediction.
+
+| Detail | Value |
+|--------|-------|
+| Type | MODEL (LINEAR_REG) |
+| Dataset | analytics |
+| Purpose | Predict customer lifetime value from behavioral and demographic features |
+| Features | 14 input features from int_rfm_features and stg_customers |
+| Output | Predicted CLV in Rands |

@@ -26,6 +26,14 @@ UNION ALL SELECT 'marts.mart_churn_risk', COUNT(*) FROM \`${PROJECT_ID}.marts.ma
 UNION ALL SELECT 'marts.mart_monthly_trends', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_monthly_trends\`
 UNION ALL SELECT 'marts.mart_demographic_summary', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_demographic_summary\`
 UNION ALL SELECT 'marts.mart_destination_benchmarks', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_destination_benchmarks\`
+UNION ALL SELECT 'marts.mart_cohort_retention', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_cohort_retention\`
+UNION ALL SELECT 'marts.mart_category_affinity', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_category_affinity\`
+UNION ALL SELECT 'marts.mart_category_scorecard', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_category_scorecard\`
+UNION ALL SELECT 'marts.mart_pitch_opportunities', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_pitch_opportunities\`
+UNION ALL SELECT 'marts.mart_churn_explained', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_churn_explained\`
+UNION ALL SELECT 'marts.mart_spend_momentum', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_spend_momentum\`
+UNION ALL SELECT 'marts.mart_category_propensity', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_category_propensity\`
+UNION ALL SELECT 'marts.mart_customer_clv', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_customer_clv\`
 ORDER BY table_name
 "
 

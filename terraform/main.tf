@@ -336,6 +336,118 @@ resource "google_bigquery_table" "mart_destination_benchmarks" {
   }
 }
 
+resource "google_bigquery_table" "mart_cohort_retention" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_cohort_retention"
+  project             = var.project_id
+  description         = "Customer retention rates by signup cohort month."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_category_affinity" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_category_affinity"
+  project             = var.project_id
+  description         = "Cross-category shopping patterns with lift and Jaccard similarity."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_category_scorecard" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_category_scorecard"
+  project             = var.project_id
+  description         = "Portfolio health overview per category with growth and health status."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_pitch_opportunities" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_pitch_opportunities"
+  project             = var.project_id
+  description         = "Ranked client pitch targets with scores and recommended actions."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_churn_explained" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_churn_explained"
+  project             = var.project_id
+  description         = "ML.EXPLAIN_PREDICT output — top reasons for each customer's churn risk."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_spend_momentum" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_spend_momentum"
+  project             = var.project_id
+  description         = "Spend acceleration/deceleration per customer with urgency scoring."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_category_propensity" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_category_propensity"
+  project             = var.project_id
+  description         = "Next category adoption predictions per segment."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_customer_clv" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_customer_clv"
+  project             = var.project_id
+  description         = "Predicted customer lifetime value with CLV tiers."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
 # ── Outputs ────────────────────────────────────────────────────
 
 output "datasets" {
@@ -349,5 +461,5 @@ output "datasets" {
 
 output "table_count" {
   description = "Number of managed tables"
-  value       = var.pipeline_enabled ? 14 : 0
+  value       = var.pipeline_enabled ? 22 : 0
 }
