@@ -883,6 +883,18 @@ elif page == "🤖 ML Evaluation":
         """)
 
         if not centroids.empty:
+            feature_names = {
+                'NR_TRNS_WEEK': 'Weekday transactions',
+                'NR_TRNS_WEEKEND': 'Weekend transactions',
+                'active_destinations': 'Merchants visited',
+                'active_months': 'Active months',
+                'active_nav_categories': 'Categories shopped',
+                'avg_val': 'Avg transaction value (R)',
+                'lst_trns_days': 'Days since last purchase',
+                'nr_trns': 'Total transactions',
+                'val_trns': 'Total spend (R)',
+            }
+            centroids['feature'] = centroids['feature'].map(lambda x: feature_names.get(x, x.replace('_', ' ').title()))
             pivot = centroids.pivot(index="feature", columns="centroid_id", values="value")
             st.dataframe(pivot, use_container_width=True)
 

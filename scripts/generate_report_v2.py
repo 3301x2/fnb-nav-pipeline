@@ -314,6 +314,19 @@ def churn_reasons_html():
         html += f'<tr><td>{r["reason_1"]}</td><td>{int(r["customers"]):,}</td><td>{r["avg_prob"]:.1f}%</td><td>{fmt(r["spend"])}</td></tr>'
     return html + '</table>'
 
+# friendly feature names for the centroid table
+FEATURE_NAMES = {
+    'NR_TRNS_WEEK': 'Weekday transactions',
+    'NR_TRNS_WEEKEND': 'Weekend transactions',
+    'active_destinations': 'Merchants visited',
+    'active_months': 'Active months',
+    'active_nav_categories': 'Categories shopped',
+    'avg_val': 'Avg transaction value (R)',
+    'lst_trns_days': 'Days since last purchase',
+    'nr_trns': 'Total transactions',
+    'val_trns': 'Total spend (R)',
+}
+
 # Helper: centroid table
 def centroid_html():
     if centroids is None: return '<p>Data not available</p>'
@@ -323,13 +336,14 @@ def centroid_html():
         html += f'<th>Cluster {c}</th>'
     html += '</tr>'
     for feat, row in pivot.iterrows():
-        html += f'<tr><td><strong>{feat}</strong></td>'
+        friendly = FEATURE_NAMES.get(feat, feat.replace('_', ' ').title())
+        html += f'<tr><td><strong>{friendly}</strong></td>'
         vals = [row[c] if pd.notna(row[c]) else 0 for c in pivot.columns]
         max_v, min_v = max(vals), min(vals)
         for v in vals:
             bg = '#e8f5e9' if v == max_v else ('#ffebee' if v == min_v else '')
             style = f' style="background:{bg}"' if bg else ''
-            html += f'<td{style}>{v}</td>'
+            html += f'<td{style}>{v:,.1f}</td>'
         html += '</tr>'
     return html + '</table>'
 

@@ -373,19 +373,32 @@ def seg_cards():
         </div>'''
     return html
 
-# Centroid table with heatmap
+# Centroid table with heatmap and friendly names
+FEATURE_NAMES = {
+    'NR_TRNS_WEEK': 'Weekday transactions',
+    'NR_TRNS_WEEKEND': 'Weekend transactions',
+    'active_destinations': 'Merchants visited',
+    'active_months': 'Active months',
+    'active_nav_categories': 'Categories shopped',
+    'avg_val': 'Avg transaction value (R)',
+    'lst_trns_days': 'Days since last purchase',
+    'nr_trns': 'Total transactions',
+    'val_trns': 'Total spend (R)',
+}
+
 def centroid_tbl():
     if centroids is None: return '<p class="na">Not available</p>'
     piv = centroids.pivot(index='feature', columns='centroid_id', values='value')
     h = '<table><tr><th>Feature</th>' + ''.join(f'<th>C{c}</th>' for c in piv.columns) + '</tr>'
     for feat, row in piv.iterrows():
+        friendly = FEATURE_NAMES.get(feat, feat.replace('_', ' ').title())
         vals = [row[c] if pd.notna(row[c]) else 0 for c in piv.columns]
         mx, mn = max(vals), min(vals)
-        h += f'<tr><td><b>{feat}</b></td>'
+        h += f'<tr><td><b>{friendly}</b></td>'
         for v in vals:
             bg = '#dcfce7' if v==mx else ('#fee2e2' if v==mn else '')
             st = f' style="background:{bg}"' if bg else ''
-            h += f'<td{st}>{v}</td>'
+            h += f'<td{st}>{v:,.1f}</td>'
         h += '</tr>'
     return h + '</table>'
 
