@@ -833,28 +833,69 @@ with open(HTML_OUT, 'w') as f:
 print(f'\n✓ Saved: {HTML_OUT}')
 print(f'  15 sections, {ov.get("Transactions",0):,} transactions')
 
-# PDF — landscape A4, wider viewport so nothing gets shrunk
+# PDF — screenshot the full page and convert to PDF pages
+# this captures exactly what you see in the browser including Chart.js canvases
 try:
     from playwright.sync_api import sync_playwright
-    import time
-    print('Generating PDF...')
+    from PIL import Image
+    import time, math
+
+    print('Generating PDF (screenshot method)...')
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        # wider viewport matches landscape A4 at 96dpi (~1122px)
-        page = browser.new_page(viewport={'width': 1122, 'height': 794})
+        page = browser.new_page(viewport={'width': 1400, 'height': 900})
         page.goto(f'file://{os.path.abspath(HTML_OUT)}', wait_until='networkidle')
-        time.sleep(5)  # let all charts render
-        page.pdf(
-            path=PDF_OUT,
-            landscape=True,
-            format='A4',
-            print_background=True,
-            margin={'top': '12mm', 'bottom': '12mm', 'left': '15mm', 'right': '15mm'},
-            scale=1.0
-        )
+        time.sleep(6)  # let all charts fully render
+
+        # hide the sticky nav for cleaner screenshots
+        page.evaluate("document.querySelector('.nav').style.display='none'")
+        time.sleep(1)
+
+        # take a full-page screenshot
+        screenshot_path = 'report_screenshot.png'
+        page.screenshot(path=screenshot_path, full_page=True)
         browser.close()
-    print(f'✓ Saved: {PDF_OUT}')
-except ImportError:
-    print(f'\nFor PDF: pip install playwright && playwright install chromium')
+
+    # split the long screenshot into landscape A4 pages
+    img = Image.open(screenshot_path)
+    w, h = img.size
+
+    # landscape A4 at 150 DPI: 1754 x 1240 px
+    # scale image to fit width, then slice into pages
+    page_w = 1754
+    scale = page_w / w
+    img = img.resize((page_w, int(h * scale)), Image.LANCZOS)
+    w, h = img.size
+
+    page_h = 1240  # landscape A4 height at 150dpi
+    margin = 40
+    usable_h = page_h - (margin * 2)
+    num_pages = math.ceil(h / usable_h)
+
+    pages = []
+    for i in range(num_pages):
+        # create white A4 page
+        page_img = Image.new('RGB', (page_w, page_h), 'white')
+        # crop the section from the screenshot
+        top = i * usable_h
+        bottom = min(top + usable_h, h)
+        section = img.crop((0, top, w, bottom))
+        # paste onto the page with margin
+        page_img.paste(section, (0, margin))
+        pages.append(page_img)
+
+    # save as multi-page PDF
+    if pages:
+        pages[0].save(PDF_OUT, save_all=True, append_images=pages[1:], resolution=150)
+        print(f'✓ Saved: {PDF_OUT} ({len(pages)} pages, landscape)')
+
+    # cleanup screenshot
+    os.remove(screenshot_path)
+
+except ImportError as e:
+    missing = str(e).split("'")[1] if "'" in str(e) else str(e)
+    print(f'\nFor PDF: pip install playwright Pillow && playwright install chromium')
+    print(f'  (missing: {missing})')
 except Exception as e:
     print(f'\nPDF failed: {e}')
+    print(f'HTML report is still available: {HTML_OUT}')
