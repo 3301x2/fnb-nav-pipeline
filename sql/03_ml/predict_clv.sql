@@ -59,6 +59,12 @@ predictions AS (
         MODEL `__PROJECT__.analytics.clv_predictor`,
         (SELECT * FROM model_input)
     )
+),
+
+-- pre-compute quintile boundaries (APPROX_QUANTILES is aggregate, cant use inline)
+quantile_bounds AS (
+    SELECT APPROX_QUANTILES(GREATEST(predicted_future_spend, 0), 5 RESPECT NULLS) AS bounds
+    FROM predictions
 )
 
 SELECT
@@ -70,12 +76,13 @@ SELECT
     p.recency_days,
     p.spend_trend,
     CASE
-        WHEN GREATEST(p.predicted_future_spend, 0) >= APPROX_QUANTILES(GREATEST(p.predicted_future_spend, 0), 5 RESPECT NULLS)[OFFSET(4)] THEN 'Platinum'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= APPROX_QUANTILES(GREATEST(p.predicted_future_spend, 0), 5 RESPECT NULLS)[OFFSET(3)] THEN 'Gold'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= APPROX_QUANTILES(GREATEST(p.predicted_future_spend, 0), 5 RESPECT NULLS)[OFFSET(2)] THEN 'Silver'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= APPROX_QUANTILES(GREATEST(p.predicted_future_spend, 0), 5 RESPECT NULLS)[OFFSET(1)] THEN 'Bronze'
+        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(4)] THEN 'Platinum'
+        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(3)] THEN 'Gold'
+        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(2)] THEN 'Silver'
+        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(1)] THEN 'Bronze'
         ELSE 'Basic'
     END AS clv_tier,
     c.age, c.gender_label, c.income_segment, c.age_group, c.income_group
 FROM predictions p
+CROSS JOIN quantile_bounds qb
 LEFT JOIN `__PROJECT__.staging.stg_customers` c ON p.UNIQUE_ID = c.UNIQUE_ID;

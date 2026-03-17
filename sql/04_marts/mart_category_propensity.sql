@@ -27,7 +27,7 @@ segment_adoption AS (
         cc.CATEGORY_TWO,
         COUNT(DISTINCT cc.UNIQUE_ID) AS segment_cat_customers,
         seg_total.segment_size,
-        ROUND(COUNT(DISTINCT cc.UNIQUE_ID) * 100.0 / seg_total.segment_size, 2) AS adoption_rate_pct
+        ROUND(SAFE_DIVIDE(COUNT(DISTINCT cc.UNIQUE_ID) * 100.0, seg_total.segment_size), 2) AS adoption_rate_pct
     FROM customer_cats cc
     JOIN `__PROJECT__.marts.mart_cluster_output` co ON cc.UNIQUE_ID = co.UNIQUE_ID
     JOIN (

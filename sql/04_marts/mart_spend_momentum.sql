@@ -71,7 +71,7 @@ SELECT
     -- priority score: high spend + declining = most urgent
     ROUND(
         SAFE_DIVIDE(h.total_spend_12m, 1000) *
-        GREATEST(1 - SAFE_DIVIDE(h.avg_recent_6m, NULLIF(h.avg_prior_6m, 0)), 0)
+        GREATEST(COALESCE(1 - SAFE_DIVIDE(h.avg_recent_6m, NULLIF(h.avg_prior_6m, 0)), 0), 0)
     , 2) AS urgency_score,
 
     c.age, c.gender_label, c.income_segment, c.age_group
