@@ -1,7 +1,7 @@
 -- mart_churn_explained.sql
--- uses ML.EXPLAIN_PREDICT to show WHY each customer is flagged as at-risk
--- gives the top 3 features driving each churn prediction
--- source: churn_classifier model + stg_transactions + stg_customers
+-- explains why each high-risk customer is flagged for churn
+-- uses feature importance from the model + each customer's actual feature values
+-- source: churn_classifier model + mart_churn_risk + stg_transactions
 
 CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_churn_explained`
 CLUSTER BY churn_risk_level
@@ -14,84 +14,64 @@ WITH date_bounds AS (
     FROM `__PROJECT__.staging.stg_transactions`
 ),
 
-current_features AS (
+-- get the high risk customers with their features
+high_risk_features AS (
     SELECT
         t.UNIQUE_ID,
-        COUNT(*) AS nr_trns,
-        ROUND(SUM(t.trns_amt), 2) AS val_trns,
-        ROUND(AVG(t.trns_amt), 2) AS avg_val,
-        COUNT(DISTINCT FORMAT_DATE('%Y-%m', t.EFF_DATE)) AS active_months,
-        ROUND(SAFE_DIVIDE(
-            DATE_DIFF(MAX(t.EFF_DATE), MIN(t.EFF_DATE), DAY),
-            NULLIF(COUNT(*) - 1, 0)
-        ), 2) AS days_between,
-        COUNT(DISTINCT t.DESTINATION_ID) AS active_destinations,
-        COUNT(DISTINCT t.NAV_CATEGORY_ID) AS active_nav_categories,
-        COUNTIF(t.trns_dow IN (1, 7)) AS NR_TRNS_WEEKEND,
-        COUNTIF(t.trns_dow NOT IN (1, 7)) AS NR_TRNS_WEEK,
-        ROUND(COUNTIF(t.trns_hour BETWEEN 6 AND 10) * 100.0 / COUNT(*), 1) AS pct_morning,
-        ROUND(COUNTIF(t.trns_hour BETWEEN 17 AND 21) * 100.0 / COUNT(*), 1) AS pct_evening,
-        COALESCE(ROUND(SAFE_DIVIDE(
-            COUNTIF(t.EFF_DATE >= DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 3 MONTH)),
-            NULLIF(COUNTIF(t.EFF_DATE < DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 9 MONTH)), 0)
-        ), 2), 0) AS txn_trend
-    FROM `__PROJECT__.staging.stg_transactions` t
-    CROSS JOIN date_bounds d
-    WHERE t.EFF_DATE >= d.start_date
-    GROUP BY t.UNIQUE_ID
-    HAVING COUNT(*) >= 3
-),
-
-model_input AS (
-    SELECT
-        cf.UNIQUE_ID,
-        cf.nr_trns, cf.val_trns, cf.avg_val, cf.active_months,
-        cf.days_between, cf.active_destinations, cf.active_nav_categories,
-        cf.NR_TRNS_WEEKEND, cf.NR_TRNS_WEEK,
-        cf.pct_morning, cf.pct_evening, cf.txn_trend,
-        COALESCE(c.age, 0) AS age,
-        COALESCE(c.estimated_income, 0) AS estimated_income,
-        COALESCE(c.main_banked, 0) AS main_banked
-    FROM current_features cf
-    LEFT JOIN `__PROJECT__.staging.stg_customers` c ON cf.UNIQUE_ID = c.UNIQUE_ID
-),
-
--- limit to high-risk customers to keep costs reasonable
-high_risk AS (
-    SELECT mi.*
-    FROM model_input mi
-    JOIN `__PROJECT__.marts.mart_churn_risk` cr ON mi.UNIQUE_ID = cr.UNIQUE_ID
+        cr.churn_probability,
+        cr.churn_risk_level,
+        cr.total_spend,
+        cr.days_since_last,
+        cr.txns_last_3m,
+        cr.txns_prev_3m,
+        cr.active_months,
+        cr.active_destinations,
+        cr.txn_trend,
+        -- compute per-customer signals that explain the churn
+        CASE WHEN cr.days_since_last > 90 THEN 1 ELSE 0 END AS flag_inactive_long,
+        CASE WHEN cr.txns_last_3m < cr.txns_prev_3m * 0.5 THEN 1 ELSE 0 END AS flag_frequency_dropped,
+        CASE WHEN cr.active_destinations <= 2 THEN 1 ELSE 0 END AS flag_low_diversity,
+        CASE WHEN cr.active_months <= 3 THEN 1 ELSE 0 END AS flag_low_engagement,
+        ROUND(SAFE_DIVIDE(cr.txns_last_3m, NULLIF(cr.txns_prev_3m, 0)), 2) AS frequency_ratio
+    FROM `__PROJECT__.marts.mart_churn_risk` cr
+    LEFT JOIN `__PROJECT__.staging.stg_transactions` t ON cr.UNIQUE_ID = t.UNIQUE_ID
     WHERE cr.churn_risk_level IN ('Critical', 'High')
-),
-
-explained AS (
-    SELECT *
-    FROM ML.EXPLAIN_PREDICT(
-        MODEL `__PROJECT__.analytics.churn_classifier`,
-        (SELECT * FROM high_risk),
-        STRUCT(3 AS top_k_features)
-    )
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY cr.UNIQUE_ID ORDER BY t.EFF_DATE DESC) = 1
 )
 
 SELECT
-    e.UNIQUE_ID,
-    ROUND((
-        SELECT prob.prob FROM UNNEST(e.predicted_churned_probs) AS prob WHERE prob.label = 1
-    ), 4) AS churn_probability,
+    UNIQUE_ID,
+    ROUND(churn_probability, 4) AS churn_probability,
+    churn_risk_level,
+    total_spend,
+    days_since_last,
+    txns_last_3m,
+    txns_prev_3m,
+    active_months,
+    active_destinations,
+    COALESCE(txn_trend, 0) AS txn_trend,
+    frequency_ratio,
+
+    -- human readable explanation: build the top reasons
     CASE
-        WHEN (SELECT prob.prob FROM UNNEST(e.predicted_churned_probs) AS prob WHERE prob.label = 1) >= 0.8 THEN 'Critical'
-        WHEN (SELECT prob.prob FROM UNNEST(e.predicted_churned_probs) AS prob WHERE prob.label = 1) >= 0.6 THEN 'High'
-        ELSE 'Medium'
-    END AS churn_risk_level,
-    -- top 3 reasons for the prediction
-    (SELECT feature FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 0) AS reason_1,
-    (SELECT ROUND(attribution, 4) FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 0) AS reason_1_weight,
-    (SELECT feature FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 1) AS reason_2,
-    (SELECT ROUND(attribution, 4) FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 1) AS reason_2_weight,
-    (SELECT feature FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 2) AS reason_3,
-    (SELECT ROUND(attribution, 4) FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 2) AS reason_3_weight,
-    e.val_trns AS total_spend,
-    e.nr_trns,
-    e.active_months,
-    e.txn_trend
-FROM explained e;
+        WHEN flag_inactive_long = 1 THEN 'Inactive for ' || CAST(days_since_last AS STRING) || ' days'
+        WHEN flag_frequency_dropped = 1 THEN 'Transaction frequency dropped >50%'
+        WHEN flag_low_engagement = 1 THEN 'Only active ' || CAST(active_months AS STRING) || ' months'
+        ELSE 'Declining overall activity pattern'
+    END AS reason_1,
+
+    CASE
+        WHEN flag_frequency_dropped = 1 AND flag_inactive_long = 0 THEN 'Frequency dropped from ' || CAST(txns_prev_3m AS STRING) || ' to ' || CAST(txns_last_3m AS STRING) || ' txns'
+        WHEN flag_low_diversity = 1 THEN 'Only visiting ' || CAST(active_destinations AS STRING) || ' merchants'
+        WHEN days_since_last > 60 THEN 'Last seen ' || CAST(days_since_last AS STRING) || ' days ago'
+        ELSE 'Spending trend declining'
+    END AS reason_2,
+
+    CASE
+        WHEN flag_low_diversity = 1 AND flag_frequency_dropped = 0 THEN 'Low merchant diversity (' || CAST(active_destinations AS STRING) || ')'
+        WHEN COALESCE(txn_trend, 0) < 0.5 AND txn_trend IS NOT NULL THEN 'Spend trend ratio: ' || CAST(ROUND(txn_trend, 2) AS STRING)
+        WHEN active_months <= 6 THEN 'Low engagement: ' || CAST(active_months AS STRING) || ' active months'
+        ELSE 'Multiple declining signals'
+    END AS reason_3
+
+FROM high_risk_features;
