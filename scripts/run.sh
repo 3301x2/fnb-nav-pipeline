@@ -257,6 +257,12 @@ if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
     run_sql "${SQL_DIR}/03_ml/predict_churn.sql" \
         "Churn prediction → probability scores → mart_churn_risk"
 
+    run_sql "${SQL_DIR}/03_ml/train_clv_model.sql" \
+        "CLV model training (linear regression, 14 features)"
+
+    run_sql "${SQL_DIR}/03_ml/predict_clv.sql" \
+        "CLV prediction → lifetime value per customer → mart_customer_clv"
+
     ok "Step 3 complete ($(elapsed ${STEP_START}))"
     echo ""
     echo "  ✅ Check BigQuery:"
@@ -317,6 +323,15 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
 
     run_sql "${SQL_DIR}/04_marts/mart_pitch_opportunities.sql" \
         "mart_pitch_opportunities (ranked client pitch targets)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_churn_explained.sql" \
+        "mart_churn_explained (ML.EXPLAIN_PREDICT — why each customer is at risk)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_spend_momentum.sql" \
+        "mart_spend_momentum (spend acceleration/deceleration per customer)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_category_propensity.sql" \
+        "mart_category_propensity (next category adoption predictions)"
 
     ok "Step 4 complete ($(elapsed ${STEP_START}))"
     echo ""
