@@ -76,5 +76,4 @@ SELECT
 
 FROM segment_adoption sa
 JOIN category_stats cs ON sa.CATEGORY_TWO = cs.CATEGORY_TWO
-WHERE sa.adoption_rate_pct < 90  -- exclude categories everyone already shops
-ORDER BY potential_revenue DESC;
+WHERE sa.adoption_rate_pct < 90;  -- exclude categories everyone already shops
