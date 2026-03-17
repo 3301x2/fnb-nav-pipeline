@@ -1,6 +1,6 @@
 ================================================
 FNB NAV Pipeline — Full Repository Context
-Generated: Tue Mar 17 02:47:53 SAST 2026
+Generated: Tue Mar 17 04:25:18 SAST 2026
 ================================================
 
 ================================================
@@ -26,6 +26,9 @@ DIRECTORY STRUCTURE
 ./notebooks/07_category_affinity.ipynb
 ./notebooks/08_category_scorecard.ipynb
 ./notebooks/09_model_validation.ipynb
+./notebooks/10_customer_lifetime_value.ipynb
+./notebooks/11_churn_deep_dive.ipynb
+./notebooks/12_growth_opportunities.ipynb
 ./scripts/apply_template.py
 ./scripts/check_and_grant.sh
 ./scripts/cost_report.sh
@@ -35,6 +38,7 @@ DIRECTORY STRUCTURE
 ./scripts/generate_report.py
 ./scripts/generate_report.sh
 ./scripts/grant_access.sh
+./scripts/looker_generator.py
 ./scripts/md2docx.sh
 ./scripts/record_demo.py
 ./scripts/record_walkthrough.sh
@@ -57,7 +61,7 @@ DIRECTORY STRUCTURE
 ./sql/04_marts/mart_category_propensity.sql
 ./sql/04_marts/mart_category_scorecard.sql
 ./sql/04_marts/mart_churn_explained.sql
-./sql/04_marts/mart_churn_risk.sql
+./sql/04_marts/mart_churn_risk_rules.sql
 ./sql/04_marts/mart_cluster_profiles.sql
 ./sql/04_marts/mart_cluster_summary.sql
 ./sql/04_marts/mart_cohort_retention.sql
@@ -67,6 +71,7 @@ DIRECTORY STRUCTURE
 ./sql/04_marts/mart_monthly_trends.sql
 ./sql/04_marts/mart_pitch_opportunities.sql
 ./sql/04_marts/mart_spend_momentum.sql
+./sql/05_looker_views/create_views.sql
 ./terraform/main.tf
 
 ================================================
@@ -126,6 +131,9 @@ exports/
 ================================================
 FILE: ./Dockerfile
 ================================================
+# NOTE: Cloud Run deployment is pending access provisioning.
+# This Dockerfile is ready but not currently in use.
+# When access is granted: bash scripts/deploy.sh
 FROM python:3.11-slim
 WORKDIR /app
 COPY dashboards/requirements.txt .
@@ -162,14 +170,15 @@ Raw FNB transaction data (2.2B+ rows)
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  03_ml                                                       │
-│  K-means clustering + logistic regression churn prediction   │
-│  BigQuery ML, in-warehouse training and inference            │
+│  K-means clustering, logistic regression churn prediction,   │
+│  CLV linear regression. BigQuery ML, in-warehouse training   │
 └────────────────────────┬────────────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  04_marts                                                    │
-│  8 dashboard-ready tables: segments, benchmarks, trends,     │
-│  demographics, geo, churn risk, behavioral patterns          │
+│  16 dashboard-ready tables: segments, benchmarks, trends,    │
+│  demographics, geo, churn risk, behavioral patterns,         │
+│  CLV, cohort retention, category intelligence, pitch scoring │
 └────────────────────────┬────────────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -223,22 +232,41 @@ fnb-nav-pipeline/
 │   │   ├── train_model.sql           ← k-means (9 features, k=5)
 │   │   ├── predict_and_name.sql      ← cluster assignment + naming
 │   │   ├── train_churn_model.sql     ← logistic regression churn classifier
-│   │   └── predict_churn.sql         ← churn probability scoring
-│   └── 04_marts/
-│       ├── mart_cluster_profiles.sql
-│       ├── mart_cluster_summary.sql
-│       ├── mart_behavioral_summary.sql
-│       ├── mart_geo_summary.sql
-│       ├── mart_churn_risk.sql
-│       ├── mart_monthly_trends.sql
-│       ├── mart_demographic_summary.sql
-│       └── mart_destination_benchmarks.sql
+│   │   ├── predict_churn.sql         ← churn probability scoring
+│   │   ├── train_clv_model.sql       ← CLV linear regression model
+│   │   └── predict_clv.sql           ← lifetime value per customer
+│   ├── 04_marts/
+│   │   ├── mart_cluster_profiles.sql
+│   │   ├── mart_cluster_summary.sql
+│   │   ├── mart_behavioral_summary.sql
+│   │   ├── mart_geo_summary.sql
+│   │   ├── mart_churn_risk_rules.sql ← fallback rule-based churn (not in pipeline)
+│   │   ├── mart_monthly_trends.sql
+│   │   ├── mart_demographic_summary.sql
+│   │   ├── mart_destination_benchmarks.sql
+│   │   ├── mart_cohort_retention.sql
+│   │   ├── mart_category_affinity.sql
+│   │   ├── mart_category_scorecard.sql
+│   │   ├── mart_pitch_opportunities.sql
+│   │   ├── mart_churn_explained.sql
+│   │   ├── mart_spend_momentum.sql
+│   │   └── mart_category_propensity.sql
+│   └── 05_looker_views/
+│       └── create_views.sql          ← 19 Looker Studio views
 │
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb     ← what's in the data?
 │   ├── 02_feature_analysis.ipynb     ← RFM distributions + correlations
 │   ├── 03_cluster_profiling.ipynb    ← segment stories + elbow method + churn eval
-│   └── 04_client_pitch_analysis.ipynb ← generate pitch deck insights for any client
+│   ├── 04_client_pitch_analysis.ipynb ← generate pitch deck insights for any client
+│   ├── 05_cohort_retention.ipynb     ← cohort retention curves
+│   ├── 06_pitch_opportunities.ipynb  ← pitch scoring and opportunity ranking
+│   ├── 07_category_affinity.ipynb    ← cross-category shopping patterns
+│   ├── 08_category_scorecard.ipynb   ← portfolio health analysis
+│   ├── 09_model_validation.ipynb     ← ML model performance checks
+│   ├── 10_customer_lifetime_value.ipynb ← CLV model training and evaluation
+│   ├── 11_churn_deep_dive.ipynb      ← churn explainability analysis
+│   └── 12_growth_opportunities.ipynb ← growth and momentum insights
 │
 ├── dashboards/
 │   ├── app.py                        ← 12-page Streamlit dashboard
@@ -254,7 +282,16 @@ fnb-nav-pipeline/
 │   ├── deploy.sh                     ← deploy dashboard to Cloud Run
 │   ├── grant_access.sh               ← grant viewer access to dashboard
 │   ├── apply_template.py             ← inject content into branded Word template
-│   └── md2docx.sh                    ← convert markdown to styled Word doc
+│   ├── md2docx.sh                    ← convert markdown to styled Word doc
+│   ├── generate_report.py            ← generate insights report (Python)
+│   ├── generate_report.sh            ← generate insights report (shell wrapper)
+│   ├── record_demo.py                ← record dashboard demo video
+│   ├── record_walkthrough.sh         ← record pipeline walkthrough
+│   ├── generate_context.sh           ← generate repo context for LLMs
+│   ├── cost_report.sh                ← BigQuery cost/usage report
+│   ├── generate_insights_pdf.py      ← generate PDF insights report
+│   ├── looker_generator.py           ← generate Looker Studio dashboards
+│   └── check_and_grant.sh            ← check permissions and grant access
 │
 ├── docs/
 │   ├── architecture_executive.md     ← solution overview (for managers)
@@ -285,8 +322,8 @@ fnb-nav-pipeline/
 | Layer | Tables | Purpose |
 |-------|--------|---------|
 | staging | 2 | Clean, joined, PII-free source of truth |
-| analytics | 4 + 2 models | Features, scores, spend metrics, k-means + churn models |
-| marts | 8 | Dashboard-ready analytical tables |
+| analytics | 4 + 3 models | Features, scores, spend metrics, k-means + churn + CLV models |
+| marts | 16 | Dashboard-ready analytical tables |
 
 ## Dashboard pages
 
@@ -302,6 +339,23 @@ fnb-nav-pipeline/
 10. **ROI Simulator** — Scenario modelling for pitch decks
 11. **ML Evaluation** — Model performance metrics and validation
 12. **Data Health** — Row counts and quality checks
+
+## Notebooks
+
+| # | Notebook | Description |
+|---|----------|-------------|
+| 01 | data_exploration | Initial data profiling and quality assessment |
+| 02 | feature_analysis | RFM feature distributions and correlations |
+| 03 | cluster_profiling | Segment stories, elbow method, and churn evaluation |
+| 04 | client_pitch_analysis | Generate pitch deck insights for any client |
+| 05 | cohort_retention | Customer retention curves by signup cohort |
+| 06 | pitch_opportunities | Pitch scoring and opportunity ranking |
+| 07 | category_affinity | Cross-category shopping pattern analysis |
+| 08 | category_scorecard | Portfolio health metrics per category |
+| 09 | model_validation | ML model performance and validation checks |
+| 10 | customer_lifetime_value | CLV model training, evaluation, and tier analysis |
+| 11 | churn_deep_dive | Churn explainability and top risk factors |
+| 12 | growth_opportunities | Growth momentum and expansion insights |
 
 ## Built by
 
@@ -2086,6 +2140,101 @@ Every destination's KPIs within its category. Dashboard anonymizes competitors.
 | penetration_pct | FLOAT | % of category customers |
 | spend_rank | INTEGER | Rank within category |
 
+### marts.mart_cohort_retention
+Customer retention rates by signup cohort month.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| cohort_month | DATE | Month of customer's first transaction |
+| cohort_size | INTEGER | Number of customers in the cohort |
+| months_since_first | INTEGER | Months elapsed since cohort start |
+| retention_pct | FLOAT | Percentage of cohort still active |
+
+### marts.mart_category_affinity
+Cross-category shopping patterns with lift and similarity metrics.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| category_a | STRING | First category in the pair |
+| category_b | STRING | Second category in the pair |
+| shared_customers | INTEGER | Customers who shop in both categories |
+| lift | FLOAT | Lift score (observed / expected co-occurrence) |
+| jaccard_pct | FLOAT | Jaccard similarity as a percentage |
+
+### marts.mart_category_scorecard
+Portfolio health overview per category.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| CATEGORY_TWO | STRING | Category name |
+| total_spend | FLOAT | Total spend across all customers |
+| growth_pct | FLOAT | Period-over-period spend growth percentage |
+| health_status | STRING | Category health label (Growing, Stable, Declining) |
+
+### marts.mart_pitch_opportunities
+Ranked client pitch targets with scores and recommended actions.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| DESTINATION | STRING | Client / merchant name |
+| CATEGORY_TWO | STRING | Category the client operates in |
+| pitch_score | FLOAT | Composite score ranking pitch attractiveness |
+| recommended_action | STRING | Suggested pitch action |
+| addressable_market | FLOAT | Estimated addressable market in Rands |
+
+### marts.mart_churn_explained
+ML.EXPLAIN_PREDICT output — top reasons for each customer's churn risk.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| UNIQUE_ID | STRING | Customer identifier |
+| churn_probability | FLOAT | Predicted probability of churn (0-1) |
+| reason_1 | STRING | Top contributing factor to churn risk |
+| reason_2 | STRING | Second contributing factor |
+| reason_3 | STRING | Third contributing factor |
+
+### marts.mart_spend_momentum
+Spend acceleration/deceleration per customer with urgency scoring.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| UNIQUE_ID | STRING | Customer identifier |
+| momentum_status | STRING | Accelerating, Stable, or Decelerating |
+| spend_change_pct | FLOAT | Period-over-period spend change percentage |
+| urgency_score | FLOAT | Urgency score for intervention prioritization |
+
+### marts.mart_category_propensity
+Next category adoption predictions per segment.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| segment_name | STRING | Customer segment |
+| CATEGORY_TWO | STRING | Category name |
+| adoption_rate_pct | FLOAT | Current adoption rate within the segment |
+| potential_revenue | FLOAT | Estimated revenue if adoption increases |
+| propensity_level | STRING | High, Medium, or Low propensity |
+
+### marts.mart_customer_clv
+Predicted customer lifetime value with tiers.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| UNIQUE_ID | STRING | Customer identifier |
+| predicted_clv | FLOAT | Predicted lifetime value in Rands |
+| clv_tier | STRING | Tier label (Platinum, Gold, Silver, Bronze) |
+| historical_spend | FLOAT | Total historical spend used as model input |
+
+### analytics.clv_predictor
+BigQuery ML linear regression model for customer lifetime value prediction.
+
+| Detail | Value |
+|--------|-------|
+| Type | MODEL (LINEAR_REG) |
+| Dataset | analytics |
+| Purpose | Predict customer lifetime value from behavioral and demographic features |
+| Features | 14 input features from int_rfm_features and stg_customers |
+| Output | Predicted CLV in Rands |
+
 
 ================================================
 FILE: ./scripts/apply_template.py
@@ -3861,6 +4010,324 @@ fi
 
 
 ================================================
+FILE: ./scripts/looker_generator.py
+================================================
+#!/usr/bin/env python3
+"""
+looker_generator.py
+═══════════════════════════════════════════════════════════════
+Generate Looker Studio dashboards for ANY combination of views.
+
+Modes:
+  --all-views          One dashboard per view (19 URLs)
+  --dashboard TYPE     Pre-built themed dashboard
+  --client X --cat Y   Client pitch with auto-anonymization
+  --views v1 v2 v3     Custom dashboard from specific views
+  --template ID        Clone an existing template
+
+Dashboard types:
+  executive      Executive summary + segments + churn + CLV
+  sales          Pitch opportunities + benchmarks + spend share + scorecard
+  retention      Cohort retention + churn explained + spend momentum
+  category       Category scorecard + affinity + propensity
+  client-deep    Full client analysis (all views, filtered)
+  full           Everything (all 19 views)
+
+Usage:
+  python scripts/looker_generator.py --all-views
+  python scripts/looker_generator.py --dashboard executive
+  python scripts/looker_generator.py --dashboard sales
+  python scripts/looker_generator.py --client "Adidas" --cat "Clothing & Apparel"
+  python scripts/looker_generator.py --views v_churn_risk v_churn_explained v_spend_momentum
+  python scripts/looker_generator.py --dashboard full --template YOUR_REPORT_ID
+"""
+
+import sys
+import argparse
+from urllib.parse import quote
+
+# ═══════════════════════════════════════════════════════════════
+# CONFIG
+# ═══════════════════════════════════════════════════════════════
+
+PROJECT_ID = "fmn-sandbox"
+DATASET = "marts"
+
+# All available views
+ALL_VIEWS = {
+    # Core pipeline
+    "v_executive_summary":   "Executive Summary KPIs",
+    "v_customer_segments":   "Customer Segments",
+    "v_cluster_profiles":    "Cluster Profiles",
+    "v_cluster_summary":     "Cluster Summary & Actions",
+    "v_spend_share":         "Spend Share & Benchmarks",
+    "v_demographics":        "Demographics",
+    "v_monthly_trends":      "Monthly Trends",
+    "v_behavioral":          "Behavioral Patterns",
+    "v_geo_insights":        "Geo Insights",
+    "v_churn_risk":          "Churn Risk Summary",
+    "v_churn_detail":        "Churn Detail (Customer-Level)",
+    # New analytics
+    "v_cohort_retention":    "Cohort Retention",
+    "v_category_affinity":   "Category Affinity (Cross-Shopping)",
+    "v_category_scorecard":  "Category Scorecard",
+    "v_pitch_opportunities": "Pitch Opportunities",
+    "v_spend_momentum":      "Spend Momentum",
+    "v_churn_explained":     "Churn Explained (ML Feature Drivers)",
+    "v_category_propensity": "Category Propensity (Next-Best)",
+    "v_customer_clv":        "Customer Lifetime Value",
+}
+
+# Pre-built dashboard themes
+DASHBOARDS = {
+    "executive": {
+        "name": "NAV — Executive Dashboard",
+        "views": [
+            "v_executive_summary", "v_customer_segments", "v_cluster_profiles",
+            "v_churn_risk", "v_customer_clv", "v_monthly_trends",
+        ],
+        "desc": "High-level KPIs, segments, churn, CLV, trends"
+    },
+    "sales": {
+        "name": "NAV — Sales & Pitch Dashboard",
+        "views": [
+            "v_pitch_opportunities", "v_spend_share", "v_category_scorecard",
+            "v_demographics", "v_geo_insights", "v_monthly_trends",
+        ],
+        "desc": "Who to pitch, market share, category health, demographics"
+    },
+    "retention": {
+        "name": "NAV — Retention & Churn Dashboard",
+        "views": [
+            "v_churn_risk", "v_churn_explained", "v_churn_detail",
+            "v_spend_momentum", "v_cohort_retention", "v_customer_clv",
+        ],
+        "desc": "Churn risk, why they're leaving, spend trends, cohort health, CLV"
+    },
+    "category": {
+        "name": "NAV — Category Intelligence",
+        "views": [
+            "v_category_scorecard", "v_category_affinity", "v_category_propensity",
+            "v_spend_share", "v_demographics", "v_monthly_trends",
+        ],
+        "desc": "Category portfolio, cross-shopping, propensity, benchmarks"
+    },
+    "segments": {
+        "name": "NAV — Customer Segmentation Deep Dive",
+        "views": [
+            "v_customer_segments", "v_cluster_profiles", "v_cluster_summary",
+            "v_behavioral", "v_demographics", "v_customer_clv",
+        ],
+        "desc": "Segment profiles, behavior, demographics, lifetime value"
+    },
+    "geo": {
+        "name": "NAV — Geographic Analysis",
+        "views": [
+            "v_geo_insights", "v_spend_share", "v_demographics",
+            "v_monthly_trends",
+        ],
+        "desc": "Provincial and municipal spend, market penetration by region"
+    },
+    "full": {
+        "name": "NAV — Complete Analytics Platform",
+        "views": list(ALL_VIEWS.keys()),
+        "desc": "All 19 views — the full monty"
+    },
+}
+
+
+# ═══════════════════════════════════════════════════════════════
+# URL BUILDERS
+# ═══════════════════════════════════════════════════════════════
+
+def build_url(views, report_name, template_id=None, project=None, dataset=None):
+    """Build a Looker Studio Linking API URL for given views."""
+    project = project or PROJECT_ID
+    dataset = dataset or DATASET
+    base = "https://lookerstudio.google.com/reporting/create?"
+    params = []
+
+    if template_id:
+        params.append(f"c.reportId={template_id}")
+        params.append("c.mode=edit")
+
+    params.append(f"r.reportName={quote(report_name)}")
+
+    for i, view_name in enumerate(views):
+        alias = f"ds{i}"
+        label = ALL_VIEWS.get(view_name, view_name)
+        params.extend([
+            f"ds.{alias}.connector=bigQuery",
+            f"ds.{alias}.datasourceName={quote(label)}",
+            f"ds.{alias}.projectId={project}",
+            f"ds.{alias}.type=TABLE",
+            f"ds.{alias}.datasetId={dataset}",
+            f"ds.{alias}.tableId={view_name}",
+        ])
+
+    return base + "&".join(params)
+
+
+def build_custom_query_url(sql, report_name, project=None):
+    """Build URL with custom SQL query as data source."""
+    project = project or PROJECT_ID
+    base = "https://lookerstudio.google.com/reporting/create?"
+    params = [
+        f"r.reportName={quote(report_name)}",
+        "ds.ds0.connector=bigQuery",
+        f"ds.ds0.datasourceName={quote(report_name)}",
+        f"ds.ds0.projectId={project}",
+        "ds.ds0.type=CUSTOM_QUERY",
+        f"ds.ds0.sql={quote(sql)}",
+    ]
+    return base + "&".join(params)
+
+
+def build_client_pitch_url(client, category, project=None, dataset=None):
+    """Client pitch with real names (internal use)."""
+    project = project or PROJECT_ID
+    dataset = dataset or DATASET
+
+    views = [
+        "v_spend_share", "v_monthly_trends", "v_demographics",
+        "v_geo_insights", "v_category_scorecard",
+    ]
+    return build_url(views, f"NAV Pitch — {client} ({category})", project=project, dataset=dataset)
+
+
+# ═══════════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════════
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate Looker Studio dashboards")
+    parser.add_argument("--template", "-t", help="Template report ID to clone")
+    parser.add_argument("--project", "-p", default=PROJECT_ID, help=f"GCP project (default: {PROJECT_ID})")
+    parser.add_argument("--dataset", "-d", default=DATASET, help=f"Dataset (default: {DATASET})")
+    parser.add_argument("--dashboard", "-D", choices=list(DASHBOARDS.keys()), help="Pre-built dashboard type")
+    parser.add_argument("--client", "-c", help="Client name for pitch dashboard")
+    parser.add_argument("--cat", help="Category for pitch dashboard")
+    parser.add_argument("--views", "-v", nargs="+", help="Specific views to include")
+    parser.add_argument("--all-views", action="store_true", help="One URL per view (19 dashboards)")
+    parser.add_argument("--list", "-l", action="store_true", help="List all available views and dashboards")
+
+    args = parser.parse_args()
+
+    print()
+    print("═══════════════════════════════════════════════════")
+    print("  Looker Studio Dashboard Generator")
+    print(f"  Project: {args.project} | Dataset: {args.dataset}")
+    print("═══════════════════════════════════════════════════")
+    print()
+
+    # ── List mode ──
+    if args.list:
+        print("  Available views (19):")
+        print()
+        for view, label in ALL_VIEWS.items():
+            print(f"    {view:30s} {label}")
+        print()
+        print("  Pre-built dashboards:")
+        print()
+        for key, dash in DASHBOARDS.items():
+            print(f"    --dashboard {key:12s} {dash['desc']}")
+            print(f"    {'':26s} Views: {', '.join(dash['views'][:3])}...")
+            print()
+        return
+
+    # ── All views mode ──
+    if args.all_views:
+        print(f"  Individual dashboards for all {len(ALL_VIEWS)} views:")
+        print()
+        for view, label in ALL_VIEWS.items():
+            url = build_url([view], f"NAV — {label}", args.template, args.project, args.dataset)
+            print(f"  {label}:")
+            print(f"    {url}")
+            print()
+        return
+
+    # ── Client pitch mode ──
+    if args.client:
+        category = args.cat or "Clothing & Apparel"
+        url = build_client_pitch_url(args.client, category, args.project, args.dataset)
+        print(f"  Client pitch: {args.client} in {category}")
+        print(f"  URL: {url}")
+        print()
+        print("  Open → Save and share → Done")
+        return
+
+    # ── Pre-built dashboard mode ──
+    if args.dashboard:
+        dash = DASHBOARDS[args.dashboard]
+        url = build_url(dash["views"], dash["name"], args.template, args.project, args.dataset)
+        print(f"  Dashboard: {args.dashboard}")
+        print(f"  {dash['desc']}")
+        print(f"  Data sources: {len(dash['views'])}")
+        print()
+        for v in dash["views"]:
+            print(f"    • {ALL_VIEWS.get(v, v)}")
+        print()
+        print(f"  URL:")
+        print(f"  {url}")
+        print()
+        print("  Open → Build charts → Save and share → Done")
+        return
+
+    # ── Custom views mode ──
+    if args.views:
+        valid = [v for v in args.views if v in ALL_VIEWS]
+        invalid = [v for v in args.views if v not in ALL_VIEWS]
+        if invalid:
+            print(f"  ⚠ Unknown views: {', '.join(invalid)}")
+            print(f"  Run --list to see available views")
+            print()
+        if valid:
+            url = build_url(valid, "NAV — Custom Dashboard", args.template, args.project, args.dataset)
+            print(f"  Custom dashboard with {len(valid)} views:")
+            for v in valid:
+                print(f"    • {ALL_VIEWS[v]}")
+            print()
+            print(f"  URL: {url}")
+        return
+
+    # ── Default: show all dashboard types ──
+    print("  No mode selected. Available options:")
+    print()
+    print("  Quick start:")
+    print("    python scripts/looker_generator.py --all-views")
+    print("    python scripts/looker_generator.py --dashboard executive")
+    print()
+    print("  Pre-built dashboards:")
+    for key, dash in DASHBOARDS.items():
+        print(f"    --dashboard {key:12s} → {dash['name']}")
+    print()
+    print("  Client pitch:")
+    print('    --client "Adidas" --cat "Clothing & Apparel"')
+    print('    --client "Pick n Pay" --cat "Groceries"')
+    print('    --client "Shell" --cat "Fuel & Energy"')
+    print()
+    print("  Custom:")
+    print("    --views v_churn_risk v_churn_explained v_spend_momentum")
+    print()
+    print("  List everything:")
+    print("    --list")
+    print()
+
+    # Show example URLs for all dashboard types
+    print("  ─── Example URLs ───")
+    print()
+    for key, dash in DASHBOARDS.items():
+        url = build_url(dash["views"], dash["name"], args.template, args.project, args.dataset)
+        print(f"  {dash['name']}:")
+        print(f"    {url}")
+        print()
+
+
+if __name__ == "__main__":
+    main()
+
+
+================================================
 FILE: ./scripts/md2docx.sh
 ================================================
 #!/bin/bash
@@ -4214,7 +4681,7 @@ case "${ENV}" in
         ;;
     *)
         # If first arg looks like a step number, assume sandbox
-        if [[ "${ENV}" =~ ^[0-5]$|^all$ ]]; then
+        if [[ "${ENV}" =~ ^[0-6]$|^all$ ]]; then
             STEP="${ENV}"
             PROJECT_ID="fmn-sandbox"
             ENV="sandbox"
@@ -4540,9 +5007,34 @@ if [[ "${STEP}" == "all" ]]; then
     echo "  Finished: $(date)"
     echo ""
     echo "  Next steps:"
-    echo "    pip install -r dashboards/requirements.txt"
-    echo "    streamlit run dashboards/app.py"
+    echo "    bash scripts/generate_report.sh    # generate insights report"
+    echo "    streamlit run dashboards/app.py     # launch dashboard (local)"
     echo "════════════════════════════════════════════════════════════"
+fi
+
+
+# ══════════════════════════════════════════════════════════════
+# STEP 6: Looker Studio Views
+# Creates: 19 views in marts dataset for Looker Studio
+# Depends: Steps 1-4 (all mart tables must exist)
+# ══════════════════════════════════════════════════════════════
+if [[ "${STEP}" == "all" || "${STEP}" == "6" ]]; then
+    log "STEP 6: Looker Studio views (19 views)"
+    STEP_START=$(date +%s)
+
+    run_sql "${SQL_DIR}/05_looker_views/create_views.sql" \
+        "Looker Studio views (19 views for all marts)"
+
+    ok "Step 6 complete ($(elapsed ${STEP_START}))"
+    echo ""
+    echo "  ✅ Views created. Generate dashboards:"
+    echo "     python scripts/looker_generator.py --list"
+    echo "     python scripts/looker_generator.py --dashboard executive"
+    echo "     python scripts/looker_generator.py --all-views"
+    echo ""
+    if [[ "${STEP}" == "6" ]]; then
+        exit 0
+    fi
 fi
 
 
@@ -4577,6 +5069,14 @@ UNION ALL SELECT 'marts.mart_churn_risk', COUNT(*) FROM \`${PROJECT_ID}.marts.ma
 UNION ALL SELECT 'marts.mart_monthly_trends', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_monthly_trends\`
 UNION ALL SELECT 'marts.mart_demographic_summary', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_demographic_summary\`
 UNION ALL SELECT 'marts.mart_destination_benchmarks', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_destination_benchmarks\`
+UNION ALL SELECT 'marts.mart_cohort_retention', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_cohort_retention\`
+UNION ALL SELECT 'marts.mart_category_affinity', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_category_affinity\`
+UNION ALL SELECT 'marts.mart_category_scorecard', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_category_scorecard\`
+UNION ALL SELECT 'marts.mart_pitch_opportunities', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_pitch_opportunities\`
+UNION ALL SELECT 'marts.mart_churn_explained', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_churn_explained\`
+UNION ALL SELECT 'marts.mart_spend_momentum', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_spend_momentum\`
+UNION ALL SELECT 'marts.mart_category_propensity', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_category_propensity\`
+UNION ALL SELECT 'marts.mart_customer_clv', COUNT(*) FROM \`${PROJECT_ID}.marts.mart_customer_clv\`
 ORDER BY table_name
 "
 
@@ -5291,31 +5791,45 @@ predictions AS (
     )
 ),
 
--- pre-compute quintile boundaries (APPROX_QUANTILES is aggregate, cant use inline)
-quantile_bounds AS (
-    SELECT APPROX_QUANTILES(GREATEST(predicted_future_spend, 0), 5 RESPECT NULLS) AS bounds
+-- cap extreme predictions at 99th percentile to avoid outlier extrapolation
+clv_cap AS (
+    SELECT APPROX_QUANTILES(GREATEST(predicted_future_spend, 0), 100)[OFFSET(99)] AS p99
     FROM predictions
+),
+
+-- assign tiers using NTILE (guarantees exactly 5 groups)
+ranked AS (
+    SELECT
+        p.UNIQUE_ID,
+        ROUND(LEAST(GREATEST(p.predicted_future_spend, 0), cap.p99), 2) AS predicted_clv,
+        p.val_trns AS historical_spend,
+        p.nr_trns,
+        p.active_months,
+        p.recency_days,
+        p.spend_trend,
+        NTILE(5) OVER (ORDER BY LEAST(GREATEST(p.predicted_future_spend, 0), cap.p99) ASC) AS clv_quintile
+    FROM predictions p
+    CROSS JOIN clv_cap cap
 )
 
 SELECT
-    p.UNIQUE_ID,
-    ROUND(GREATEST(p.predicted_future_spend, 0), 2) AS predicted_clv,
-    p.val_trns AS historical_spend,
-    p.nr_trns,
-    p.active_months,
-    p.recency_days,
-    p.spend_trend,
-    CASE
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(4)] THEN 'Platinum'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(3)] THEN 'Gold'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(2)] THEN 'Silver'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(1)] THEN 'Bronze'
-        ELSE 'Basic'
+    r.UNIQUE_ID,
+    r.predicted_clv,
+    r.historical_spend,
+    r.nr_trns,
+    r.active_months,
+    r.recency_days,
+    r.spend_trend,
+    CASE r.clv_quintile
+        WHEN 5 THEN 'Platinum'
+        WHEN 4 THEN 'Gold'
+        WHEN 3 THEN 'Silver'
+        WHEN 2 THEN 'Bronze'
+        WHEN 1 THEN 'Basic'
     END AS clv_tier,
     c.age, c.gender_label, c.income_segment, c.age_group, c.income_group
-FROM predictions p
-CROSS JOIN quantile_bounds qb
-LEFT JOIN `__PROJECT__.staging.stg_customers` c ON p.UNIQUE_ID = c.UNIQUE_ID;
+FROM ranked r
+LEFT JOIN `__PROJECT__.staging.stg_customers` c ON r.UNIQUE_ID = c.UNIQUE_ID;
 
 
 ================================================
@@ -5764,8 +6278,7 @@ SELECT
 
 FROM segment_adoption sa
 JOIN category_stats cs ON sa.CATEGORY_TWO = cs.CATEGORY_TWO
-WHERE sa.adoption_rate_pct < 90  -- exclude categories everyone already shops
-ORDER BY potential_revenue DESC;
+WHERE sa.adoption_rate_pct < 90;  -- exclude categories everyone already shops
 
 
 ================================================
@@ -5902,9 +6415,9 @@ ORDER BY cb.total_spend DESC;
 FILE: ./sql/04_marts/mart_churn_explained.sql
 ================================================
 -- mart_churn_explained.sql
--- uses ML.EXPLAIN_PREDICT to show WHY each customer is flagged as at-risk
--- gives the top 3 features driving each churn prediction
--- source: churn_classifier model + stg_transactions + stg_customers
+-- explains why each high-risk customer is flagged for churn
+-- uses feature importance from the model + each customer's actual feature values
+-- source: churn_classifier model + mart_churn_risk + stg_transactions
 
 CREATE OR REPLACE TABLE `__PROJECT__.marts.mart_churn_explained`
 CLUSTER BY churn_risk_level
@@ -5917,91 +6430,71 @@ WITH date_bounds AS (
     FROM `__PROJECT__.staging.stg_transactions`
 ),
 
-current_features AS (
+-- get the high risk customers with their features
+high_risk_features AS (
     SELECT
         t.UNIQUE_ID,
-        COUNT(*) AS nr_trns,
-        ROUND(SUM(t.trns_amt), 2) AS val_trns,
-        ROUND(AVG(t.trns_amt), 2) AS avg_val,
-        COUNT(DISTINCT FORMAT_DATE('%Y-%m', t.EFF_DATE)) AS active_months,
-        ROUND(SAFE_DIVIDE(
-            DATE_DIFF(MAX(t.EFF_DATE), MIN(t.EFF_DATE), DAY),
-            NULLIF(COUNT(*) - 1, 0)
-        ), 2) AS days_between,
-        COUNT(DISTINCT t.DESTINATION_ID) AS active_destinations,
-        COUNT(DISTINCT t.NAV_CATEGORY_ID) AS active_nav_categories,
-        COUNTIF(t.trns_dow IN (1, 7)) AS NR_TRNS_WEEKEND,
-        COUNTIF(t.trns_dow NOT IN (1, 7)) AS NR_TRNS_WEEK,
-        ROUND(COUNTIF(t.trns_hour BETWEEN 6 AND 10) * 100.0 / COUNT(*), 1) AS pct_morning,
-        ROUND(COUNTIF(t.trns_hour BETWEEN 17 AND 21) * 100.0 / COUNT(*), 1) AS pct_evening,
-        COALESCE(ROUND(SAFE_DIVIDE(
-            COUNTIF(t.EFF_DATE >= DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 3 MONTH)),
-            NULLIF(COUNTIF(t.EFF_DATE < DATE_SUB((SELECT max_date FROM date_bounds), INTERVAL 9 MONTH)), 0)
-        ), 2), 0) AS txn_trend
-    FROM `__PROJECT__.staging.stg_transactions` t
-    CROSS JOIN date_bounds d
-    WHERE t.EFF_DATE >= d.start_date
-    GROUP BY t.UNIQUE_ID
-    HAVING COUNT(*) >= 3
-),
-
-model_input AS (
-    SELECT
-        cf.UNIQUE_ID,
-        cf.nr_trns, cf.val_trns, cf.avg_val, cf.active_months,
-        cf.days_between, cf.active_destinations, cf.active_nav_categories,
-        cf.NR_TRNS_WEEKEND, cf.NR_TRNS_WEEK,
-        cf.pct_morning, cf.pct_evening, cf.txn_trend,
-        COALESCE(c.age, 0) AS age,
-        COALESCE(c.estimated_income, 0) AS estimated_income,
-        COALESCE(c.main_banked, 0) AS main_banked
-    FROM current_features cf
-    LEFT JOIN `__PROJECT__.staging.stg_customers` c ON cf.UNIQUE_ID = c.UNIQUE_ID
-),
-
--- limit to high-risk customers to keep costs reasonable
-high_risk AS (
-    SELECT mi.*
-    FROM model_input mi
-    JOIN `__PROJECT__.marts.mart_churn_risk` cr ON mi.UNIQUE_ID = cr.UNIQUE_ID
+        cr.churn_probability,
+        cr.churn_risk_level,
+        cr.total_spend,
+        cr.days_since_last,
+        cr.txns_last_3m,
+        cr.txns_prev_3m,
+        cr.active_months,
+        cr.active_destinations,
+        cr.txn_trend,
+        -- compute per-customer signals that explain the churn
+        CASE WHEN cr.days_since_last > 90 THEN 1 ELSE 0 END AS flag_inactive_long,
+        CASE WHEN cr.txns_last_3m < cr.txns_prev_3m * 0.5 THEN 1 ELSE 0 END AS flag_frequency_dropped,
+        CASE WHEN cr.active_destinations <= 2 THEN 1 ELSE 0 END AS flag_low_diversity,
+        CASE WHEN cr.active_months <= 3 THEN 1 ELSE 0 END AS flag_low_engagement,
+        ROUND(SAFE_DIVIDE(cr.txns_last_3m, NULLIF(cr.txns_prev_3m, 0)), 2) AS frequency_ratio
+    FROM `__PROJECT__.marts.mart_churn_risk` cr
+    LEFT JOIN `__PROJECT__.staging.stg_transactions` t ON cr.UNIQUE_ID = t.UNIQUE_ID
     WHERE cr.churn_risk_level IN ('Critical', 'High')
-),
-
-explained AS (
-    SELECT *
-    FROM ML.EXPLAIN_PREDICT(
-        MODEL `__PROJECT__.analytics.churn_classifier`,
-        (SELECT * FROM high_risk),
-        STRUCT(3 AS top_k_features)
-    )
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY cr.UNIQUE_ID ORDER BY t.EFF_DATE DESC) = 1
 )
 
 SELECT
-    e.UNIQUE_ID,
-    ROUND((
-        SELECT prob.prob FROM UNNEST(e.predicted_churned_probs) AS prob WHERE prob.label = 1
-    ), 4) AS churn_probability,
+    UNIQUE_ID,
+    ROUND(churn_probability, 4) AS churn_probability,
+    churn_risk_level,
+    total_spend,
+    days_since_last,
+    txns_last_3m,
+    txns_prev_3m,
+    active_months,
+    active_destinations,
+    COALESCE(txn_trend, 0) AS txn_trend,
+    frequency_ratio,
+
+    -- human readable explanation: build the top reasons
     CASE
-        WHEN (SELECT prob.prob FROM UNNEST(e.predicted_churned_probs) AS prob WHERE prob.label = 1) >= 0.8 THEN 'Critical'
-        WHEN (SELECT prob.prob FROM UNNEST(e.predicted_churned_probs) AS prob WHERE prob.label = 1) >= 0.6 THEN 'High'
-        ELSE 'Medium'
-    END AS churn_risk_level,
-    -- top 3 reasons for the prediction
-    (SELECT feature FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 0) AS reason_1,
-    (SELECT ROUND(attribution, 4) FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 0) AS reason_1_weight,
-    (SELECT feature FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 1) AS reason_2,
-    (SELECT ROUND(attribution, 4) FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 1) AS reason_2_weight,
-    (SELECT feature FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 2) AS reason_3,
-    (SELECT ROUND(attribution, 4) FROM UNNEST(e.top_feature_attributions) WITH OFFSET AS pos ORDER BY pos LIMIT 1 OFFSET 2) AS reason_3_weight,
-    e.val_trns AS total_spend,
-    e.nr_trns,
-    e.active_months,
-    e.txn_trend
-FROM explained e;
+        WHEN flag_inactive_long = 1 THEN 'Inactive for ' || CAST(days_since_last AS STRING) || ' days'
+        WHEN flag_frequency_dropped = 1 THEN 'Transaction frequency dropped >50%'
+        WHEN flag_low_engagement = 1 THEN 'Only active ' || CAST(active_months AS STRING) || ' months'
+        ELSE 'Declining overall activity pattern'
+    END AS reason_1,
+
+    CASE
+        WHEN flag_frequency_dropped = 1 AND flag_inactive_long = 0 THEN 'Frequency dropped from ' || CAST(txns_prev_3m AS STRING) || ' to ' || CAST(txns_last_3m AS STRING) || ' txns'
+        WHEN flag_low_diversity = 1 THEN 'Only visiting ' || CAST(active_destinations AS STRING) || ' merchants'
+        WHEN days_since_last > 60 THEN 'Last seen ' || CAST(days_since_last AS STRING) || ' days ago'
+        ELSE 'Spending trend declining'
+    END AS reason_2,
+
+    CASE
+        WHEN flag_low_diversity = 1 AND flag_frequency_dropped = 0 THEN 'Low merchant diversity (' || CAST(active_destinations AS STRING) || ')'
+        WHEN COALESCE(txn_trend, 0) < 0.5 AND txn_trend IS NOT NULL THEN 'Spend trend ratio: ' || CAST(ROUND(txn_trend, 2) AS STRING)
+        WHEN active_months <= 6 THEN 'Low engagement: ' || CAST(active_months AS STRING) || ' active months'
+        ELSE 'Multiple declining signals'
+    END AS reason_3
+
+FROM high_risk_features;
 
 
 ================================================
-FILE: ./sql/04_marts/mart_churn_risk.sql
+FILE: ./sql/04_marts/mart_churn_risk_rules.sql
 ================================================
 -- mart_churn_risk_rules.sql
 -- rule-based churn scoring, kept as a fallback/comparison to the ML version
@@ -6570,6 +7063,136 @@ LEFT JOIN `__PROJECT__.staging.stg_customers` c ON h.UNIQUE_ID = c.UNIQUE_ID;
 
 
 ================================================
+FILE: ./sql/05_looker_views/create_views.sql
+================================================
+-- ════════════════════════════════════════════════════════════════
+-- Looker Studio Views — ALL mart tables
+-- ════════════════════════════════════════════════════════════════
+-- One view per Looker Studio data source.
+-- Run: bash scripts/run.sh sandbox 6
+-- ════════════════════════════════════════════════════════════════
+
+
+-- ═══════════════════════════════════════════════════
+-- CORE PIPELINE VIEWS (original 10)
+-- ═══════════════════════════════════════════════════
+
+-- 1. Executive Summary KPIs
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_executive_summary` AS
+SELECT
+    (SELECT COUNT(*) FROM `__PROJECT__.staging.stg_customers`) AS total_customers,
+    (SELECT COUNT(*) FROM `__PROJECT__.staging.stg_transactions`) AS total_transactions,
+    (SELECT SUM(val_trns) FROM `__PROJECT__.marts.mart_cluster_output`) AS total_spend,
+    (SELECT COUNT(DISTINCT DESTINATION) FROM `__PROJECT__.marts.mart_destination_benchmarks`) AS total_destinations,
+    (SELECT COUNT(*) FROM `__PROJECT__.marts.mart_cluster_output` WHERE segment_name = 'Champions') AS champion_customers,
+    (SELECT ROUND(SUM(val_trns), 0) FROM `__PROJECT__.marts.mart_cluster_output` WHERE segment_name = 'Champions') AS champion_spend,
+    (SELECT COUNT(*) FROM `__PROJECT__.marts.mart_churn_risk` WHERE churn_risk_level IN ('Critical', 'High')) AS at_risk_customers,
+    (SELECT ROUND(SUM(total_spend), 0) FROM `__PROJECT__.marts.mart_churn_risk` WHERE churn_risk_level IN ('Critical', 'High')) AS at_risk_spend;
+
+-- 2. Customer Segments
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_customer_segments` AS
+SELECT
+    segment_name,
+    COUNT(*) AS customers,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) AS pct_customers,
+    ROUND(SUM(val_trns), 0) AS total_spend,
+    ROUND(SUM(val_trns) * 100.0 / SUM(SUM(val_trns)) OVER(), 1) AS pct_revenue,
+    ROUND(AVG(val_trns), 0) AS avg_spend,
+    ROUND(AVG(nr_trns), 0) AS avg_transactions,
+    ROUND(AVG(lst_trns_days), 0) AS avg_recency_days,
+    ROUND(AVG(active_destinations), 1) AS avg_merchants,
+    ROUND(AVG(active_months), 1) AS avg_active_months
+FROM `__PROJECT__.marts.mart_cluster_output`
+GROUP BY segment_name;
+
+-- 3. Spend Share & Benchmarks
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_spend_share` AS
+SELECT * FROM `__PROJECT__.marts.mart_destination_benchmarks`;
+
+-- 4. Demographics
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_demographics` AS
+SELECT * FROM `__PROJECT__.marts.mart_demographic_summary`;
+
+-- 5. Monthly Trends
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_monthly_trends` AS
+SELECT * FROM `__PROJECT__.marts.mart_monthly_trends`;
+
+-- 6. Churn Risk Summary
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_churn_risk` AS
+SELECT
+    churn_risk_level,
+    COUNT(*) AS customers,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) AS pct_of_total,
+    ROUND(AVG(churn_probability) * 100, 1) AS avg_churn_pct,
+    ROUND(SUM(total_spend), 0) AS total_spend_at_risk,
+    ROUND(AVG(total_spend), 0) AS avg_spend,
+    ROUND(AVG(days_since_last), 0) AS avg_days_since_last,
+    ROUND(AVG(txns_last_3m), 1) AS avg_recent_txns
+FROM `__PROJECT__.marts.mart_churn_risk`
+GROUP BY churn_risk_level;
+
+-- 7. Churn Detail (customer-level drill-down)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_churn_detail` AS
+SELECT * FROM `__PROJECT__.marts.mart_churn_risk`;
+
+-- 8. Geo Insights
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_geo_insights` AS
+SELECT
+    *,
+    ROUND(total_spend * 100.0 / SUM(total_spend) OVER(PARTITION BY CATEGORY_TWO), 1) AS pct_of_category
+FROM `__PROJECT__.marts.mart_geo_summary`;
+
+-- 9. Behavioral
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_behavioral` AS
+SELECT * FROM `__PROJECT__.marts.mart_behavioral_summary`;
+
+-- 10. Cluster Profiles
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_cluster_profiles` AS
+SELECT * FROM `__PROJECT__.marts.mart_cluster_profiles`;
+
+
+-- ═══════════════════════════════════════════════════
+-- NEW ANALYTICS VIEWS (added by Prosper)
+-- ═══════════════════════════════════════════════════
+
+-- 11. Cohort Retention
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_cohort_retention` AS
+SELECT * FROM `__PROJECT__.marts.mart_cohort_retention`;
+
+-- 12. Category Affinity (cross-shopping patterns)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_category_affinity` AS
+SELECT * FROM `__PROJECT__.marts.mart_category_affinity`;
+
+-- 13. Category Scorecard (portfolio overview)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_category_scorecard` AS
+SELECT * FROM `__PROJECT__.marts.mart_category_scorecard`;
+
+-- 14. Pitch Opportunities (ranked by growth potential)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_pitch_opportunities` AS
+SELECT * FROM `__PROJECT__.marts.mart_pitch_opportunities`;
+
+-- 15. Spend Momentum (acceleration/deceleration)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_spend_momentum` AS
+SELECT * FROM `__PROJECT__.marts.mart_spend_momentum`;
+
+-- 16. Churn Explained (ML.EXPLAIN_PREDICT — why each customer is at risk)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_churn_explained` AS
+SELECT * FROM `__PROJECT__.marts.mart_churn_explained`;
+
+-- 17. Category Propensity (next-best-category for each customer)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_category_propensity` AS
+SELECT * FROM `__PROJECT__.marts.mart_category_propensity`;
+
+-- 18. Customer Lifetime Value (predicted 12-month spend)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_customer_clv` AS
+SELECT * FROM `__PROJECT__.marts.mart_customer_clv`;
+
+-- 19. Cluster Summary (exec descriptions + actions)
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_cluster_summary` AS
+SELECT * FROM `__PROJECT__.marts.mart_cluster_summary`;
+
+
+================================================
 FILE: ./terraform/main.tf
 ================================================
 # ════════════════════════════════════════════════════════════════
@@ -6910,6 +7533,118 @@ resource "google_bigquery_table" "mart_destination_benchmarks" {
   }
 }
 
+resource "google_bigquery_table" "mart_cohort_retention" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_cohort_retention"
+  project             = var.project_id
+  description         = "Customer retention rates by signup cohort month."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_category_affinity" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_category_affinity"
+  project             = var.project_id
+  description         = "Cross-category shopping patterns with lift and Jaccard similarity."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_category_scorecard" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_category_scorecard"
+  project             = var.project_id
+  description         = "Portfolio health overview per category with growth and health status."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_pitch_opportunities" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_pitch_opportunities"
+  project             = var.project_id
+  description         = "Ranked client pitch targets with scores and recommended actions."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_churn_explained" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_churn_explained"
+  project             = var.project_id
+  description         = "ML.EXPLAIN_PREDICT output — top reasons for each customer's churn risk."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_spend_momentum" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_spend_momentum"
+  project             = var.project_id
+  description         = "Spend acceleration/deceleration per customer with urgency scoring."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_category_propensity" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_category_propensity"
+  project             = var.project_id
+  description         = "Next category adoption predictions per segment."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
+resource "google_bigquery_table" "mart_customer_clv" {
+  count               = var.pipeline_enabled ? 1 : 0
+  dataset_id          = google_bigquery_dataset.marts[0].dataset_id
+  table_id            = "mart_customer_clv"
+  project             = var.project_id
+  description         = "Predicted customer lifetime value with CLV tiers."
+  deletion_protection = false
+
+  labels = {
+    layer      = "marts"
+    managed_by = "terraform"
+  }
+}
+
 # ── Outputs ────────────────────────────────────────────────────
 
 output "datasets" {
@@ -6923,7 +7658,7 @@ output "datasets" {
 
 output "table_count" {
   description = "Number of managed tables"
-  value       = var.pipeline_enabled ? 14 : 0
+  value       = var.pipeline_enabled ? 22 : 0
 }
 
 
