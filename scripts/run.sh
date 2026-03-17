@@ -379,3 +379,28 @@ if [[ "${STEP}" == "all" ]]; then
     echo "    streamlit run dashboards/app.py"
     echo "════════════════════════════════════════════════════════════"
 fi
+
+
+# ══════════════════════════════════════════════════════════════
+# STEP 6: Looker Studio Views
+# Creates: 19 views in marts dataset for Looker Studio
+# Depends: Steps 1-4 (all mart tables must exist)
+# ══════════════════════════════════════════════════════════════
+if [[ "${STEP}" == "all" || "${STEP}" == "6" ]]; then
+    log "STEP 6: Looker Studio views (19 views)"
+    STEP_START=$(date +%s)
+
+    run_sql "${SQL_DIR}/05_looker_views/create_views.sql" \
+        "Looker Studio views (19 views for all marts)"
+
+    ok "Step 6 complete ($(elapsed ${STEP_START}))"
+    echo ""
+    echo "  ✅ Views created. Generate dashboards:"
+    echo "     python scripts/looker_generator.py --list"
+    echo "     python scripts/looker_generator.py --dashboard executive"
+    echo "     python scripts/looker_generator.py --all-views"
+    echo ""
+    if [[ "${STEP}" == "6" ]]; then
+        exit 0
+    fi
+fi
