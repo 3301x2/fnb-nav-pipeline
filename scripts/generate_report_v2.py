@@ -557,6 +557,34 @@ tr:hover {{ background:#f8fafc; }}
 
 /* Methodology */
 .method {{ font-family:'JetBrains Mono',monospace; font-size:0.8rem; background:#f8fafc; border-radius:8px; padding:16px; border-left:3px solid #94a3b8; margin:16px 0; color:#475569; }}
+
+/* Print / PDF styles */
+@media print {{
+    body {{ font-size:11pt; -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
+    .nav {{ display:none; }}
+    .hdr {{ padding:30px 25px 25px; }}
+    .hdr h1 {{ font-size:2rem; }}
+    .hdr .kpis {{ gap:15px; }}
+    .hdr .kpi {{ padding:12px 18px; }}
+    .hdr .kpi .v {{ font-size:1.3rem; }}
+    .ctn {{ padding:15px; }}
+    .sec {{ padding:25px; margin-bottom:18px; page-break-inside:avoid; break-inside:avoid; }}
+    .sec h2 {{ font-size:1.3rem; }}
+    .chart-row {{ gap:16px; }}
+    .chart-box {{ height:280px !important; }}
+    .chart-full {{ height:280px !important; }}
+    table {{ font-size:9pt; }}
+    th {{ padding:7px 10px; font-size:8pt; }}
+    td {{ padding:6px 10px; }}
+    .segment-card {{ padding:16px; margin:10px 0; }}
+    .seg-metrics {{ gap:8px; }}
+    .seg-v {{ font-size:0.95rem; }}
+    .model-card {{ gap:10px; }}
+    .model-m {{ padding:12px; }}
+    .model-m .v {{ font-size:1.1rem; }}
+    .method {{ font-size:0.7rem; padding:10px; }}
+    .ftr {{ padding:20px; }}
+}}
 </style>
 </head>
 <body>
@@ -805,18 +833,25 @@ with open(HTML_OUT, 'w') as f:
 print(f'\n✓ Saved: {HTML_OUT}')
 print(f'  15 sections, {ov.get("Transactions",0):,} transactions')
 
-# PDF
+# PDF — landscape A4, wider viewport so nothing gets shrunk
 try:
     from playwright.sync_api import sync_playwright
     import time
     print('Generating PDF...')
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page(viewport={'width':1280,'height':900})
+        # wider viewport matches landscape A4 at 96dpi (~1122px)
+        page = browser.new_page(viewport={'width': 1122, 'height': 794})
         page.goto(f'file://{os.path.abspath(HTML_OUT)}', wait_until='networkidle')
-        time.sleep(4)
-        page.pdf(path=PDF_OUT, format='A4', print_background=True,
-                 margin={'top':'10mm','bottom':'10mm','left':'10mm','right':'10mm'})
+        time.sleep(5)  # let all charts render
+        page.pdf(
+            path=PDF_OUT,
+            landscape=True,
+            format='A4',
+            print_background=True,
+            margin={'top': '12mm', 'bottom': '12mm', 'left': '15mm', 'right': '15mm'},
+            scale=1.0
+        )
         browser.close()
     print(f'✓ Saved: {PDF_OUT}')
 except ImportError:
