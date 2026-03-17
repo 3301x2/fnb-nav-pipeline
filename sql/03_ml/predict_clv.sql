@@ -61,28 +61,42 @@ predictions AS (
     )
 ),
 
--- pre-compute quintile boundaries (APPROX_QUANTILES is aggregate, cant use inline)
-quantile_bounds AS (
-    SELECT APPROX_QUANTILES(GREATEST(predicted_future_spend, 0), 5 RESPECT NULLS) AS bounds
+-- cap extreme predictions at 99th percentile to avoid outlier extrapolation
+clv_cap AS (
+    SELECT APPROX_QUANTILES(GREATEST(predicted_future_spend, 0), 100)[OFFSET(99)] AS p99
     FROM predictions
+),
+
+-- assign tiers using NTILE (guarantees exactly 5 groups)
+ranked AS (
+    SELECT
+        p.UNIQUE_ID,
+        ROUND(LEAST(GREATEST(p.predicted_future_spend, 0), cap.p99), 2) AS predicted_clv,
+        p.val_trns AS historical_spend,
+        p.nr_trns,
+        p.active_months,
+        p.recency_days,
+        p.spend_trend,
+        NTILE(5) OVER (ORDER BY LEAST(GREATEST(p.predicted_future_spend, 0), cap.p99) ASC) AS clv_quintile
+    FROM predictions p
+    CROSS JOIN clv_cap cap
 )
 
 SELECT
-    p.UNIQUE_ID,
-    ROUND(GREATEST(p.predicted_future_spend, 0), 2) AS predicted_clv,
-    p.val_trns AS historical_spend,
-    p.nr_trns,
-    p.active_months,
-    p.recency_days,
-    p.spend_trend,
-    CASE
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(4)] THEN 'Platinum'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(3)] THEN 'Gold'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(2)] THEN 'Silver'
-        WHEN GREATEST(p.predicted_future_spend, 0) >= qb.bounds[OFFSET(1)] THEN 'Bronze'
-        ELSE 'Basic'
+    r.UNIQUE_ID,
+    r.predicted_clv,
+    r.historical_spend,
+    r.nr_trns,
+    r.active_months,
+    r.recency_days,
+    r.spend_trend,
+    CASE r.clv_quintile
+        WHEN 5 THEN 'Platinum'
+        WHEN 4 THEN 'Gold'
+        WHEN 3 THEN 'Silver'
+        WHEN 2 THEN 'Bronze'
+        WHEN 1 THEN 'Basic'
     END AS clv_tier,
     c.age, c.gender_label, c.income_segment, c.age_group, c.income_group
-FROM predictions p
-CROSS JOIN quantile_bounds qb
-LEFT JOIN `__PROJECT__.staging.stg_customers` c ON p.UNIQUE_ID = c.UNIQUE_ID;
+FROM ranked r
+LEFT JOIN `__PROJECT__.staging.stg_customers` c ON r.UNIQUE_ID = c.UNIQUE_ID;
