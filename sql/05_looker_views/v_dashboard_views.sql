@@ -47,7 +47,7 @@ SELECT
     cr.churn_probability,
     cr.total_spend,
     cr.days_since_last,
-    cr.segment_name,
+    co.segment_name,
     ce.reason_1,
     ce.reason_2,
     ce.reason_3,
@@ -62,6 +62,7 @@ SELECT
     c.gender_label,
     c.income_group
 FROM `__PROJECT__.marts.mart_churn_risk` cr
+LEFT JOIN `__PROJECT__.marts.mart_cluster_output` co ON cr.UNIQUE_ID = co.UNIQUE_ID
 LEFT JOIN `__PROJECT__.marts.mart_churn_explained` ce ON cr.UNIQUE_ID = ce.UNIQUE_ID
 LEFT JOIN `__PROJECT__.marts.mart_customer_clv` clv ON cr.UNIQUE_ID = clv.UNIQUE_ID
 LEFT JOIN `__PROJECT__.marts.mart_spend_momentum` sm ON cr.UNIQUE_ID = sm.UNIQUE_ID
