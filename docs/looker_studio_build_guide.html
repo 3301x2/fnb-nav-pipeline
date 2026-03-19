@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Looker Studio Build Guide — NAV Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#fafbfc;color:#1a202c;line-height:1.7;padding:20px}
+.ctn{max-width:900px;margin:0 auto}
+h1{font-size:2rem;font-weight:700;color:#0f172a;margin:40px 0 8px}
+h2{font-size:1.4rem;font-weight:700;color:#1e3a5f;margin:32px 0 8px;padding-top:20px;border-top:1px solid #e2e8f0}
+h3{font-size:1.1rem;font-weight:600;color:#0f172a;margin:24px 0 6px}
+p{margin:8px 0;color:#374151}
+.step{background:#fff;border-radius:12px;padding:20px 24px;margin:16px 0;border:1px solid #f1f5f9;counter-increment:step}
+.step::before{content:"Step " counter(step);display:block;font-size:.75rem;font-weight:600;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.step h4{font-size:1rem;font-weight:600;margin-bottom:6px}
+.step p{font-size:.92rem}
+code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.85rem;color:#0f172a}
+pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:14px 18px;margin:10px 0;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.5}
+.warn{background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.9rem}
+.tip{background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.9rem}
+.important{background:#fef2f2;border-left:4px solid #ef4444;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.9rem}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.85rem}
+th{background:#0f172a;color:white;padding:8px 12px;text-align:left;font-size:.8rem}
+td{padding:8px 12px;border-bottom:1px solid #f1f5f9}
+.page-tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.78rem;font-weight:600;margin-right:6px}
+.pt-ov{background:#dbeafe;color:#1e40af}.pt-cp{background:#fef3c7;color:#92400e}.pt-sg{background:#dcfce7;color:#166534}
+.pt-ch{background:#fee2e2;color:#991b1b}.pt-ct{background:#f3e5f5;color:#7b1fa2}.pt-au{background:#f1f5f9;color:#475569}
+nav{position:sticky;top:0;background:#fff;padding:10px 0;border-bottom:1px solid #e2e8f0;z-index:10;margin-bottom:20px}
+nav a{display:inline-block;padding:4px 12px;margin:2px;border-radius:6px;text-decoration:none;color:#64748b;font-size:.82rem;font-weight:500}
+nav a:hover{background:#f1f5f9;color:#1e3a5f}
+.checklist{list-style:none;padding:0}
+.checklist li{padding:6px 0 6px 28px;position:relative;font-size:.9rem}
+.checklist li::before{content:"☐";position:absolute;left:0;font-size:1.1rem}
+</style>
+</head><body>
+<div class="ctn">
+
+<h1>Looker Studio Build Guide</h1>
+<p>Step-by-step instructions for building the NAV Analytics dashboard in Looker Studio. Follow each step exactly. Total time: ~3-4 hours.</p>
+
+<nav>
+<a href="#prereqs">Prerequisites</a>
+<a href="#datasources">Data sources</a>
+<a href="#page1">Overview</a>
+<a href="#page2">Client pitch</a>
+<a href="#page3">Segments</a>
+<a href="#page4">Churn & CLV</a>
+<a href="#page5">Categories</a>
+<a href="#page6">Audiences</a>
+<a href="#anon">Anonymization</a>
+<a href="#polish">Polish</a>
+</nav>
+
+<!-- ═══ PREREQUISITES ═══ -->
+<h2 id="prereqs">Prerequisites</h2>
+
+<div class="step"><h4>Run the new SQL files</h4>
+<p>Before building the dashboard, you need the new mart tables. On the work machine:</p>
+<pre>cd ~/fnb-nav-pipeline
+git pull
+
+# Run the new marts (step 4 only — doesn't re-run staging or ML)
+bash scripts/run.sh sandbox 4
+
+# Run the new views
+bq query --use_legacy_sql=false --project_id=fmn-sandbox < sql/05_looker_views/v_pitch_views.sql
+bq query --use_legacy_sql=false --project_id=fmn-sandbox < sql/05_looker_views/v_dashboard_views.sql</pre>
+<p>Verify everything exists:</p>
+<pre>bq ls fmn-sandbox:marts | grep -E "mart_store_loyalty|mart_store_time|mart_audience"</pre>
+</div>
+
+<div class="step"><h4>Open Looker Studio</h4>
+<p>Go to <code>lookerstudio.google.com</code>. Sign in with your FNB Google account. Click <strong>+ Create → Report</strong>. Name it <strong>NAV Analytics Dashboard</strong>.</p>
+</div>
+
+<!-- ═══ DATA SOURCES ═══ -->
+<h2 id="datasources">Connect data sources</h2>
+<p>You need to connect 8 data sources. Each one is a BigQuery table or view. You do this once and all pages share them.</p>
+
+<div class="step"><h4>Add first data source</h4>
+<p>In your new blank report, click <strong>Add data</strong> (or <strong>Resource → Manage added data sources → Add a data source</strong>). Select <strong>BigQuery</strong>. Navigate to:</p>
+<pre>Project: fmn-sandbox → Dataset: marts → Table/View</pre>
+<p>Add each of these one by one. After adding each, click <strong>Add</strong>, then <strong>Add to report</strong>, then repeat for the next one.</p>
+
+<table>
+<tr><th>#</th><th>Table / View</th><th>Used by page</th><th>Rename to</th></tr>
+<tr><td>1</td><td>v_dashboard_overview</td><td><span class="page-tag pt-ov">Overview</span></td><td>DS_Overview</td></tr>
+<tr><td>2</td><td>v_dashboard_client_pitch</td><td><span class="page-tag pt-cp">Client Pitch</span></td><td>DS_ClientPitch</td></tr>
+<tr><td>3</td><td>v_pitch_internal</td><td><span class="page-tag pt-cp">Client Pitch (internal)</span></td><td>DS_PitchInternal</td></tr>
+<tr><td>4</td><td>v_pitch_external</td><td><span class="page-tag pt-cp">Client Pitch (external)</span></td><td>DS_PitchExternal</td></tr>
+<tr><td>5</td><td>v_dashboard_segments</td><td><span class="page-tag pt-sg">Segments</span></td><td>DS_Segments</td></tr>
+<tr><td>6</td><td>v_dashboard_churn</td><td><span class="page-tag pt-ch">Churn & CLV</span></td><td>DS_Churn</td></tr>
+<tr><td>7</td><td>mart_category_scorecard</td><td><span class="page-tag pt-ct">Categories</span></td><td>DS_Categories</td></tr>
+<tr><td>8</td><td>mart_audience_catalog</td><td><span class="page-tag pt-au">Audiences</span></td><td>DS_Audiences</td></tr>
+<tr><td>9</td><td>mart_category_affinity</td><td><span class="page-tag pt-ct">Categories</span></td><td>DS_Affinity</td></tr>
+<tr><td>10</td><td>mart_pitch_opportunities</td><td><span class="page-tag pt-ct">Categories</span></td><td>DS_PitchOpps</td></tr>
+<tr><td>11</td><td>mart_monthly_trends</td><td><span class="page-tag pt-cp">Client Pitch</span></td><td>DS_Trends</td></tr>
+<tr><td>12</td><td>mart_demographic_summary</td><td><span class="page-tag pt-cp">Client Pitch</span></td><td>DS_Demographics</td></tr>
+<tr><td>13</td><td>mart_geo_summary</td><td><span class="page-tag pt-cp">Client Pitch</span></td><td>DS_Geo</td></tr>
+<tr><td>14</td><td>mart_cohort_retention</td><td><span class="page-tag pt-sg">Segments</span></td><td>DS_Retention</td></tr>
+<tr><td>15</td><td>mart_spend_momentum</td><td><span class="page-tag pt-sg">Segments</span></td><td>DS_Momentum</td></tr>
+<tr><td>16</td><td>mart_category_propensity</td><td><span class="page-tag pt-ct">Categories</span></td><td>DS_Propensity</td></tr>
+<tr><td>17</td><td>mart_store_loyalty</td><td><span class="page-tag pt-cp">Client Pitch</span></td><td>DS_StoreLoyalty</td></tr>
+<tr><td>18</td><td>mart_store_time_patterns</td><td><span class="page-tag pt-cp">Client Pitch</span></td><td>DS_StoreTime</td></tr>
+</table>
+
+<div class="tip">To rename a data source: <strong>Resource → Manage added data sources</strong> → click the pencil icon next to the name.</div>
+</div>
+
+<!-- ═══ PAGE 1: OVERVIEW ═══ -->
+<h2 id="page1"><span class="page-tag pt-ov">Page 1</span> Executive Overview</h2>
+
+<div class="step"><h4>Create the page</h4>
+<p>The first page of your report is already created. Right-click the page tab at the top and rename it to <strong>Overview</strong>.</p>
+</div>
+
+<div class="step"><h4>Add 5 scorecard KPIs across the top</h4>
+<p>For each KPI: <strong>Add a chart → Scorecard</strong>. Data source: <strong>DS_Overview</strong>.</p>
+<table>
+<tr><th>Scorecard</th><th>Metric</th><th>Compact number</th></tr>
+<tr><td>Transactions</td><td>total_transactions (SUM)</td><td>Yes</td></tr>
+<tr><td>Customers</td><td>total_customers (SUM)</td><td>Yes</td></tr>
+<tr><td>Segmented</td><td>segmented_customers (SUM)</td><td>Yes</td></tr>
+<tr><td>Churn scored</td><td>churn_scored (SUM)</td><td>Yes</td></tr>
+<tr><td>Destinations</td><td>destinations (SUM)</td><td>Yes</td></tr>
+</table>
+<p>Arrange them in a row across the top. Set font size to 24px for the number, 10px for the label.</p>
+</div>
+
+<div class="step"><h4>Add segment donut chart</h4>
+<p><strong>Add a chart → Pie chart</strong> (donut). Data source: <strong>DS_Segments</strong>.</p>
+<ul>
+<li>Dimension: <code>segment_name</code></li>
+<li>Metric: <code>customers</code> (SUM)</li>
+<li>Style → Donut hole: 60%</li>
+<li>Colors: Champions=#0f172a, Loyal=#1e3a5f, Mid-Tier=#4CAF50, At Risk=#FF9800, Dormant=#f44336</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add revenue concentration bar chart</h4>
+<p><strong>Add a chart → Bar chart</strong> (grouped). Data source: <strong>DS_Segments</strong>.</p>
+<ul>
+<li>Dimension: <code>segment_name</code></li>
+<li>Metrics: Create two calculated fields:
+<ul>
+<li><code>pct_customers</code>: already exists</li>
+<li><code>pct_revenue</code>: already exists (from mart_cluster_profiles)</li>
+</ul></li>
+<li>Style: grouped bars, first series = grey (#94a3b8), second = navy (#0f172a)</li>
+</ul>
+<div class="tip">If pct_customers and pct_revenue aren't in the view, add them as calculated fields: <code>customers / SUM(customers)</code> formatted as percent.</div>
+</div>
+
+<div class="step"><h4>Add 3 highlight scorecards below</h4>
+<p>Data source: <strong>DS_Churn</strong>.</p>
+<table>
+<tr><th>Scorecard</th><th>Metric</th><th>Filter</th></tr>
+<tr><td>At-risk spend</td><td>total_spend (SUM)</td><td>churn_risk_level IN (Critical, High)</td></tr>
+<tr><td>Critical + High count</td><td>Record Count</td><td>churn_risk_level IN (Critical, High)</td></tr>
+<tr><td>10% recovery</td><td>Create calculated field: total_spend * 0.1</td><td>churn_risk_level IN (Critical, High)</td></tr>
+</table>
+</div>
+
+<!-- ═══ PAGE 2: CLIENT PITCH ═══ -->
+<h2 id="page2"><span class="page-tag pt-cp">Page 2</span> Client Pitch</h2>
+<p>This is the most complex page. It has filters, KPIs, competitor charts, loyalty, time patterns, trends, demographics, and geography — all on one page.</p>
+
+<div class="step"><h4>Create page and add filters</h4>
+<p>Click the <strong>+</strong> tab to add a new page. Rename to <strong>Client Pitch</strong>.</p>
+<p>Add 2 dropdown filter controls at the top:</p>
+<ul>
+<li><strong>Add a control → Drop-down list</strong>. Data source: DS_ClientPitch. Control field: <code>CATEGORY_TWO</code>. Label: "Category".</li>
+<li><strong>Add a control → Drop-down list</strong>. Data source: DS_ClientPitch. Control field: <code>DESTINATION</code>. Label: "Client".</li>
+</ul>
+<div class="warn">Both filters must use the SAME data source (DS_ClientPitch) so they cross-filter. When you select a category, the client dropdown should only show destinations in that category.</div>
+</div>
+
+<div class="step"><h4>Add 8 KPI scorecards</h4>
+<p>Data source: <strong>DS_ClientPitch</strong>. All are SUM or AVG aggregations.</p>
+<table>
+<tr><th>Scorecard</th><th>Field</th><th>Aggregation</th></tr>
+<tr><td>Customers</td><td>customers</td><td>SUM</td></tr>
+<tr><td>Total Spend</td><td>total_spend</td><td>SUM</td></tr>
+<tr><td>Market Share</td><td>market_share_pct</td><td>AVG</td></tr>
+<tr><td>Penetration</td><td>penetration_pct</td><td>AVG</td></tr>
+<tr><td>Avg Transaction</td><td>avg_txn_value</td><td>AVG</td></tr>
+<tr><td>Spend/Customer</td><td>spend_per_customer</td><td>AVG</td></tr>
+<tr><td>Rank</td><td>spend_rank</td><td>AVG</td></tr>
+<tr><td>Share of Wallet</td><td>avg_loyalty_pct</td><td>AVG</td></tr>
+</table>
+<p>Arrange in 2 rows of 4. Format: large number, small label below.</p>
+</div>
+
+<div class="step"><h4>Add competitor benchmark chart</h4>
+<p><strong>Add a chart → Bar chart</strong> (horizontal). Data source: DS_ClientPitch.</p>
+<ul>
+<li>Dimension: <code>DESTINATION</code></li>
+<li>Metric: <code>market_share_pct</code> (AVG)</li>
+<li>Sort: market_share_pct descending</li>
+<li>Style: horizontal bars, single color #0f172a</li>
+</ul>
+<p>Duplicate this chart. Change metric to <code>spend_per_customer</code> for the second chart.</p>
+<div class="tip">To highlight the selected client in a different color, use a <strong>conditional formatting</strong> rule or create a calculated field: <code>IF(DESTINATION = "WOOLWORTHS", "Client", "Competitor")</code> and use it as the color dimension.</div>
+</div>
+
+<div class="step"><h4>Add store loyalty chart</h4>
+<p><strong>Add a chart → Bar chart</strong>. Data source: <strong>DS_StoreLoyalty</strong>.</p>
+<ul>
+<li>Dimension: <code>DESTINATION</code></li>
+<li>Metric: <code>pct_loyal_50</code> (AVG) — "% of customers with 50%+ share of wallet"</li>
+<li>Sort: pct_loyal_50 descending</li>
+<li>Add filter: same CATEGORY_TWO filter from the page dropdown</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add shopping time table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: <strong>DS_StoreTime</strong>.</p>
+<ul>
+<li>Dimension: <code>DESTINATION</code></li>
+<li>Metrics: <code>pct_early_morning</code>, <code>pct_mid_morning</code>, <code>pct_afternoon</code>, <code>pct_evening</code>, <code>pct_weekend</code></li>
+<li>Add filter: same CATEGORY_TWO filter</li>
+<li>Style: heatmap on columns (Style → Column → Apply heatmap)</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add monthly trend chart</h4>
+<p><strong>Add a chart → Time series</strong>. Data source: <strong>DS_Trends</strong>.</p>
+<ul>
+<li>Date dimension: <code>month</code></li>
+<li>Breakdown dimension: <code>DESTINATION</code> (this gives one line per store)</li>
+<li>Metric: <code>total_spend</code> (SUM)</li>
+<li>Add filter: same CATEGORY_TWO filter</li>
+</ul>
+<div class="tip">To show just the client + category total: create a calculated field <code>IF(DESTINATION = selected_client, DESTINATION, "Category Total")</code> and use as breakdown.</div>
+</div>
+
+<div class="step"><h4>Add demographics charts</h4>
+<p>Three charts in a row. Data source: <strong>DS_Demographics</strong>. All filtered by CATEGORY_TWO.</p>
+<table>
+<tr><th>Chart type</th><th>Dimension</th><th>Metric</th></tr>
+<tr><td>Bar chart</td><td>age_group</td><td>customers (SUM)</td></tr>
+<tr><td>Pie chart (donut)</td><td>gender_label</td><td>customers (SUM)</td></tr>
+<tr><td>Bar chart</td><td>income_group</td><td>total_spend (SUM)</td></tr>
+</table>
+</div>
+
+<div class="step"><h4>Add geography chart</h4>
+<p><strong>Add a chart → Bar chart</strong> (horizontal). Data source: <strong>DS_Geo</strong>.</p>
+<ul>
+<li>Dimension: <code>PROVINCE</code></li>
+<li>Metric: <code>total_spend</code> (SUM)</li>
+<li>Sort: total_spend descending</li>
+<li>Filter: same CATEGORY_TWO filter</li>
+</ul>
+<div class="tip">For drill-down: In the chart settings, enable "Drill down" and add MUNICIPALITY as the second dimension. Users can click a province to see municipalities inside it.</div>
+</div>
+
+<div class="step"><h4>Add day-of-week chart</h4>
+<p><strong>Add a chart → Bar chart</strong>. Data source: <strong>DS_StoreTime</strong>.</p>
+<ul>
+<li>Dimension: Create a calculated field that maps peak_day_number to day names</li>
+<li>Or simply use a table with columns: pct_sunday through pct_saturday</li>
+<li>Filter: same CATEGORY_TWO and DESTINATION filters</li>
+</ul>
+</div>
+
+<!-- ═══ PAGE 3: SEGMENTS ═══ -->
+<h2 id="page3"><span class="page-tag pt-sg">Page 3</span> Customer Segments</h2>
+
+<div class="step"><h4>Create page and add segment filter</h4>
+<p>New page. Rename to <strong>Segments</strong>.</p>
+<p>Add dropdown: Data source: DS_Segments. Control field: <code>segment_name</code>. Default: "All".</p>
+</div>
+
+<div class="step"><h4>Add segment profiles table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: <strong>DS_Segments</strong>.</p>
+<ul>
+<li>Dimensions: <code>segment_name</code></li>
+<li>Metrics: <code>customers</code>, <code>avg_spend</code>, <code>avg_txns</code>, <code>avg_recency_days</code>, <code>avg_merchants</code>, <code>pct_weekend</code>, <code>top_age_group</code>, <code>top_income_group</code></li>
+<li>Sort: avg_spend descending</li>
+<li>Enable: "Row numbers" off, "Pagination" off (only 5 rows)</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add retention curve</h4>
+<p><strong>Add a chart → Line chart</strong>. Data source: <strong>DS_Retention</strong>.</p>
+<ul>
+<li>Dimension: <code>months_since_first</code></li>
+<li>Metric: <code>retention_pct</code> (AVG)</li>
+<li>Add filter: cohort_size >= 1000</li>
+<li>Style: single line, color #0f172a, smooth curve, data points visible</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add spend momentum table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: <strong>DS_Momentum</strong>.</p>
+<ul>
+<li>Dimension: <code>momentum_status</code></li>
+<li>Metrics: Record Count (as "Customers"), <code>total_spend_12m</code> (AVG), <code>spend_change_pct</code> (AVG), <code>urgency_score</code> (AVG)</li>
+</ul>
+</div>
+
+<!-- ═══ PAGE 4: CHURN & CLV ═══ -->
+<h2 id="page4"><span class="page-tag pt-ch">Page 4</span> Churn & CLV</h2>
+
+<div class="step"><h4>Create page with filters</h4>
+<p>New page → <strong>Churn & CLV</strong>.</p>
+<p>Add 3 dropdowns (all DS_Churn): <code>churn_risk_level</code>, <code>clv_tier</code>, <code>segment_name</code>.</p>
+</div>
+
+<div class="step"><h4>Add 3 headline scorecards</h4>
+<p>Data source: DS_Churn. Filter: churn_risk_level IN (Critical, High).</p>
+<table>
+<tr><th>Scorecard</th><th>Metric</th></tr>
+<tr><td>Critical + High count</td><td>Record Count</td></tr>
+<tr><td>Spend at risk</td><td>total_spend (SUM)</td></tr>
+<tr><td>10% recovery</td><td>Calculated: total_spend * 0.1 (SUM)</td></tr>
+</table>
+</div>
+
+<div class="step"><h4>Add churn drivers chart</h4>
+<p><strong>Add a chart → Bar chart</strong> (horizontal). Data source: DS_Churn.</p>
+<ul>
+<li>Dimension: <code>reason_1</code></li>
+<li>Metric: Record Count</li>
+<li>Sort: Record Count descending</li>
+<li>Filter: churn_risk_level IN (Critical, High)</li>
+<li>Limit: 8 bars</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add CLV tier table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: DS_Churn.</p>
+<ul>
+<li>Dimension: <code>clv_tier</code></li>
+<li>Metrics: Record Count, <code>predicted_clv</code> (AVG), <code>historical_spend</code> (AVG), <code>predicted_clv</code> (SUM)</li>
+<li>Sort: predicted_clv (AVG) descending</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add risk level breakdown table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: DS_Churn.</p>
+<ul>
+<li>Dimension: <code>churn_risk_level</code></li>
+<li>Metrics: Record Count, <code>churn_probability</code> (AVG), <code>total_spend</code> (SUM), <code>days_since_last</code> (AVG)</li>
+</ul>
+</div>
+
+<!-- ═══ PAGE 5: CATEGORIES ═══ -->
+<h2 id="page5"><span class="page-tag pt-ct">Page 5</span> Category Intelligence</h2>
+
+<div class="step"><h4>Create page with category filter</h4>
+<p>New page → <strong>Categories</strong>.</p>
+<p>Add dropdown: DS_Categories, field: <code>CATEGORY_TWO</code>.</p>
+</div>
+
+<div class="step"><h4>Add health scorecard table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: <strong>DS_Categories</strong>.</p>
+<ul>
+<li>Dimension: <code>CATEGORY_TWO</code></li>
+<li>Metrics: <code>total_customers</code>, <code>total_spend</code>, <code>growth_pct</code>, <code>avg_churn_pct</code>, <code>pct_champions</code>, <code>pct_dormant</code>, <code>top_destination_name</code>, <code>health_status</code></li>
+<li>Sort: total_spend descending</li>
+<li>Conditional formatting on growth_pct: green if positive, red if negative</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add cross-sell affinity table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: <strong>DS_Affinity</strong>.</p>
+<ul>
+<li>Dimensions: <code>category_a</code>, <code>category_b</code></li>
+<li>Metrics: <code>shared_customers</code> (SUM), <code>lift</code> (AVG), <code>pct_a_also_shops_b</code> (AVG)</li>
+<li>Sort: shared_customers descending</li>
+<li>Filter: lift > 1.2</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add propensity table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: <strong>DS_Propensity</strong>.</p>
+<ul>
+<li>Dimensions: <code>segment_name</code>, <code>CATEGORY_TWO</code></li>
+<li>Metrics: <code>unadopted_customers</code>, <code>potential_revenue</code>, <code>adoption_rate_pct</code></li>
+<li>Filter: propensity_level IN (Very High, High)</li>
+<li>Sort: potential_revenue descending</li>
+</ul>
+</div>
+
+<div class="step"><h4>Add pitch opportunities table</h4>
+<p><strong>Add a chart → Table</strong>. Data source: <strong>DS_PitchOpps</strong>.</p>
+<ul>
+<li>Dimensions: <code>DESTINATION</code>, <code>CATEGORY_TWO</code></li>
+<li>Metrics: <code>customers</code>, <code>market_share_pct</code>, <code>addressable_market</code>, <code>pitch_score</code>, <code>recommended_action</code></li>
+<li>Sort: pitch_score descending</li>
+</ul>
+</div>
+
+<!-- ═══ PAGE 6: AUDIENCES ═══ -->
+<h2 id="page6"><span class="page-tag pt-au">Page 6</span> Audience Catalog</h2>
+
+<div class="step"><h4>Create page with filters</h4>
+<p>New page → <strong>Audiences</strong>.</p>
+<p>Add 3 dropdowns (all DS_Audiences): <code>audience_type</code>, <code>top_province</code>, <code>top_segment</code>.</p>
+</div>
+
+<div class="step"><h4>Add 3 KPI scorecards</h4>
+<p>Data source: DS_Audiences.</p>
+<table>
+<tr><th>Scorecard</th><th>Metric</th></tr>
+<tr><td>Total audiences</td><td>Record Count</td></tr>
+<tr><td>Total reachable</td><td>audience_size (SUM)</td></tr>
+<tr><td>Avg audience size</td><td>audience_size (AVG)</td></tr>
+</table>
+</div>
+
+<div class="step"><h4>Add audience catalog table</h4>
+<p><strong>Add a chart → Table with heatmap</strong>. Data source: <strong>DS_Audiences</strong>.</p>
+<ul>
+<li>Dimensions: <code>audience_name</code>, <code>audience_type</code></li>
+<li>Metrics: <code>audience_size</code>, <code>avg_spend</code>, <code>avg_age</code>, <code>pct_female</code>, <code>top_province</code></li>
+<li>Sort: audience_size descending</li>
+<li>Enable: "Show summary row" to see totals</li>
+<li>Style: Apply heatmap on audience_size column</li>
+</ul>
+</div>
+
+<!-- ═══ ANONYMIZATION ═══ -->
+<h2 id="anon">Anonymization (Internal vs External)</h2>
+
+<div class="step"><h4>Duplicate the Client Pitch page</h4>
+<p>Right-click the <strong>Client Pitch</strong> page tab → <strong>Duplicate page</strong>. Rename the copy to <strong>Client Pitch (External)</strong>.</p>
+</div>
+
+<div class="step"><h4>Switch data source on the external page</h4>
+<p>On the external page, select ALL charts that show destination names (competitor benchmarks, time patterns, loyalty). For each chart:</p>
+<ol>
+<li>Click the chart</li>
+<li>In the right panel, click the data source dropdown</li>
+<li>Change from <strong>DS_PitchInternal</strong> to <strong>DS_PitchExternal</strong></li>
+<li>Change the dimension from <code>DESTINATION</code> to <code>display_name</code></li>
+</ol>
+<p>Now the external page shows "Competitor #1", "Competitor #2" etc. while the internal page shows real names. The selected client always shows their real name on both pages.</p>
+</div>
+
+<div class="important">Keep both pages in the report. When presenting internally, navigate to "Client Pitch". When presenting to a client, navigate to "Client Pitch (External)". You can also hide pages: right-click tab → "Hide in view mode".</div>
+
+<!-- ═══ POLISH ═══ -->
+<h2 id="polish">Polish & finishing touches</h2>
+
+<div class="step"><h4>Set up drill-downs</h4>
+<p>For any chart where you want drill-down, click the chart → Data panel → turn on <strong>Drill down</strong>. Then add dimensions in order:</p>
+<table>
+<tr><th>Chart</th><th>Drill path</th></tr>
+<tr><td>Geography bar chart</td><td>PROVINCE → MUNICIPALITY</td></tr>
+<tr><td>Monthly trend</td><td>month → week (if available)</td></tr>
+<tr><td>Age chart</td><td>age_group → income_group</td></tr>
+<tr><td>Churn risk table</td><td>churn_risk_level → reason_1</td></tr>
+<tr><td>Category scorecard</td><td>CATEGORY_TWO → DESTINATION</td></tr>
+</table>
+</div>
+
+<div class="step"><h4>Add download buttons</h4>
+<p>Looker Studio has built-in export. Users can:</p>
+<ul>
+<li>Click <strong>⋮</strong> (three dots) on any chart → <strong>Export data</strong> → CSV or Google Sheets</li>
+<li>Click <strong>File → Download</strong> → PDF (exports entire page)</li>
+</ul>
+<p>No extra work needed. Just make sure tables have clean column names.</p>
+</div>
+
+<div class="step"><h4>Apply theme / branding</h4>
+<p><strong>Theme and layout</strong> (top menu) → <strong>Custom</strong>:</p>
+<ul>
+<li>Primary color: <code>#1e3a5f</code></li>
+<li>Secondary color: <code>#2E75B6</code></li>
+<li>Font: Google Sans or Roboto</li>
+<li>Background: <code>#fafbfc</code></li>
+<li>Chart background: <code>#ffffff</code></li>
+</ul>
+</div>
+
+<div class="step"><h4>Add header</h4>
+<p>On each page, add a text box at the top with:</p>
+<ul>
+<li>Title: "NAV Analytics Dashboard"</li>
+<li>Subtitle: page name</li>
+<li>Bottom-right: "fmn-sandbox · Internal"</li>
+</ul>
+</div>
+
+<div class="step"><h4>Set default filters</h4>
+<p>For the Client Pitch page, set default filter values so it loads with a useful view:</p>
+<ul>
+<li>Category: "Groceries" (or whatever your most-used category is)</li>
+<li>Client: first destination by spend in that category</li>
+</ul>
+<p>Click the filter control → Properties → Default value.</p>
+</div>
+
+<div class="step"><h4>Test everything</h4>
+<ul class="checklist">
+<li>Switch to View mode (eye icon top right)</li>
+<li>Change category dropdown — do all charts update?</li>
+<li>Change client dropdown — do KPIs update?</li>
+<li>Click a province in the geo chart — does it drill to municipality?</li>
+<li>Go to Client Pitch (External) — are competitors anonymized?</li>
+<li>Export a table as CSV — does it download?</li>
+<li>Download page as PDF — does it look clean?</li>
+<li>Check every page has data (no empty charts)</li>
+<li>Check Audiences page — do type filters work?</li>
+</ul>
+</div>
+
+<div class="step"><h4>Share the dashboard</h4>
+<p>Click <strong>Share</strong> (top right) → Add emails or set to "Anyone in the organization with the link can view".</p>
+<p>For external sharing: <strong>File → Download as PDF</strong> and send the file. Never share the live dashboard link externally.</p>
+</div>
+
+<h2>Checklist summary</h2>
+<table>
+<tr><th>Page</th><th>Data sources</th><th>Charts</th><th>Filters</th></tr>
+<tr><td>Overview</td><td>DS_Overview, DS_Segments, DS_Churn</td><td>5 scorecards, 1 donut, 1 grouped bar, 3 highlight scorecards</td><td>None</td></tr>
+<tr><td>Client Pitch</td><td>DS_ClientPitch, DS_StoreLoyalty, DS_StoreTime, DS_Trends, DS_Demographics, DS_Geo</td><td>8 KPIs, 2 benchmark bars, 1 loyalty bar, 1 time table, 1 trend line, 3 demo charts, 1 geo bar, 1 day-of-week bar</td><td>Category, Client</td></tr>
+<tr><td>Segments</td><td>DS_Segments, DS_Retention, DS_Momentum</td><td>1 profile table, 1 retention line, 1 momentum table</td><td>Segment</td></tr>
+<tr><td>Churn & CLV</td><td>DS_Churn</td><td>3 scorecards, 1 drivers bar, 1 CLV table, 1 risk table</td><td>Risk, CLV tier, Segment</td></tr>
+<tr><td>Categories</td><td>DS_Categories, DS_Affinity, DS_Propensity, DS_PitchOpps</td><td>1 health table, 1 affinity table, 1 propensity table, 1 pitch table</td><td>Category</td></tr>
+<tr><td>Audiences</td><td>DS_Audiences</td><td>3 scorecards, 1 catalog table</td><td>Type, Province, Segment</td></tr>
+<tr><td>Client Pitch (Ext)</td><td>DS_PitchExternal + same as Client Pitch</td><td>Same as Client Pitch but anonymized</td><td>Same</td></tr>
+</table>
+
+</div>
+</body></html>

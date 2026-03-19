@@ -31,43 +31,8 @@ set -euo pipefail
 # ════════════════════════════════════════════════════════════════
 
 # ── Configuration ──────────────────────────────────────────────
-# ── Environment ────────────────────────────────────────────────
-# Usage:
-#   bash scripts/run.sh sandbox          → all steps on fmn-sandbox
-#   bash scripts/run.sh production 3     → step 3 on fmn-production
-#   bash scripts/run.sh sandbox 1        → step 1 on fmn-sandbox
-
-ENV="${1:-sandbox}"
-STEP="${2:-all}"
-
-case "${ENV}" in
-    sandbox|dev|sb)
-        PROJECT_ID="fmn-sandbox"
-        ;;
-    production|prod|prd)
-        PROJECT_ID="fmn-production"
-        ;;
-    *)
-        # If first arg looks like a step number, assume sandbox
-        if [[ "${ENV}" =~ ^[0-6]$|^all$ ]]; then
-            STEP="${ENV}"
-            PROJECT_ID="fmn-sandbox"
-            ENV="sandbox"
-        else
-            echo "Unknown environment: ${ENV}"
-            echo "Usage: bash scripts/run.sh [sandbox|production] [0-5|all]"
-            echo ""
-            echo "Examples:"
-            echo "  bash scripts/run.sh sandbox       → full pipeline on fmn-sandbox"
-            echo "  bash scripts/run.sh production 3   → step 3 on fmn-production"
-            echo "  bash scripts/run.sh sandbox 1      → step 1 on fmn-sandbox"
-            echo "  bash scripts/run.sh 3              → step 3 on fmn-sandbox (default)"
-            exit 1
-        fi
-        ;;
-esac
-
-LOCATION="africa-south1"
+PROJECT_ID="${BQ_PROJECT_ID:-fmn-sandbox}"
+LOCATION="US"
 
 # Source datasets (where raw data lives)
 RAW_DATASET="customer_spend"
@@ -98,12 +63,11 @@ run_sql() {
     local file="$1"
     local desc="$2"
     log "Running: ${desc}"
-    # Replace placeholder with actual project ID at runtime
-    sed "s/__PROJECT__/${PROJECT_ID}/g" "${file}" | \
     bq query \
         --use_legacy_sql=false \
         --project_id="${PROJECT_ID}" \
         --max_rows=0 \
+        < "${file}" \
     && ok "${desc}" \
     || fail "${desc} — query failed"
 }
@@ -115,14 +79,16 @@ elapsed() {
     echo "$((diff / 60))m $((diff % 60))s"
 }
 
+# ── Step argument ──────────────────────────────────────────────
+STEP="${1:-all}"
+
 # ── Pre-flight checks ─────────────────────────────────────────
 echo ""
 echo "════════════════════════════════════════════════════════════"
 echo "  FNB NAV Pipeline"
-echo "  Environment: ${ENV}"
-echo "  Project:     ${PROJECT_ID}"
-echo "  Step:        ${STEP}"
-echo "  Started:     $(date)"
+echo "  Project: ${PROJECT_ID}"
+echo "  Step:    ${STEP}"
+echo "  Started: $(date)"
 echo "════════════════════════════════════════════════════════════"
 echo ""
 
@@ -252,16 +218,10 @@ if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
     run_sql "${SQL_DIR}/03_ml/train_churn_model.sql" \
         "Churn classifier training (logistic regression, 15 features)"
 
-    bq rm -f ${PROJECT_ID}:marts.mart_churn_risk 2>/dev/null || true
+    bq rm -f fmn-sandbox:marts.mart_churn_risk 2>/dev/null || true
 
     run_sql "${SQL_DIR}/03_ml/predict_churn.sql" \
         "Churn prediction → probability scores → mart_churn_risk"
-
-    run_sql "${SQL_DIR}/03_ml/train_clv_model.sql" \
-        "CLV model training (linear regression, 14 features)"
-
-    run_sql "${SQL_DIR}/03_ml/predict_clv.sql" \
-        "CLV prediction → lifetime value per customer → mart_customer_clv"
 
     ok "Step 3 complete ($(elapsed ${STEP_START}))"
     echo ""
@@ -312,27 +272,6 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
     run_sql "${SQL_DIR}/04_marts/mart_destination_benchmarks.sql" \
         "mart_destination_benchmarks (all destinations — dashboard anonymizes competitors)"
 
-    run_sql "${SQL_DIR}/04_marts/mart_cohort_retention.sql" \
-        "mart_cohort_retention (customer retention by signup cohort)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_category_affinity.sql" \
-        "mart_category_affinity (cross-category shopping patterns)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_category_scorecard.sql" \
-        "mart_category_scorecard (portfolio health overview)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_pitch_opportunities.sql" \
-        "mart_pitch_opportunities (ranked client pitch targets)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_churn_explained.sql" \
-        "mart_churn_explained (ML.EXPLAIN_PREDICT — why each customer is at risk)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_spend_momentum.sql" \
-        "mart_spend_momentum (spend acceleration/deceleration per customer)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_category_propensity.sql" \
-        "mart_category_propensity (next category adoption predictions)"
-
     ok "Step 4 complete ($(elapsed ${STEP_START}))"
     echo ""
     echo "  ✅ Check BigQuery:"
@@ -375,32 +314,7 @@ if [[ "${STEP}" == "all" ]]; then
     echo "  Finished: $(date)"
     echo ""
     echo "  Next steps:"
-    echo "    bash scripts/generate_report.sh    # generate insights report"
-    echo "    streamlit run dashboards/app.py     # launch dashboard (local)"
+    echo "    pip install -r dashboards/requirements.txt"
+    echo "    streamlit run dashboards/app.py"
     echo "════════════════════════════════════════════════════════════"
-fi
-
-
-# ══════════════════════════════════════════════════════════════
-# STEP 6: Looker Studio Views
-# Creates: 19 views in marts dataset for Looker Studio
-# Depends: Steps 1-4 (all mart tables must exist)
-# ══════════════════════════════════════════════════════════════
-if [[ "${STEP}" == "all" || "${STEP}" == "6" ]]; then
-    log "STEP 6: Looker Studio views (19 views)"
-    STEP_START=$(date +%s)
-
-    run_sql "${SQL_DIR}/05_looker_views/create_views.sql" \
-        "Looker Studio views (19 views for all marts)"
-
-    ok "Step 6 complete ($(elapsed ${STEP_START}))"
-    echo ""
-    echo "  ✅ Views created. Generate dashboards:"
-    echo "     python scripts/looker_generator.py --list"
-    echo "     python scripts/looker_generator.py --dashboard executive"
-    echo "     python scripts/looker_generator.py --all-views"
-    echo ""
-    if [[ "${STEP}" == "6" ]]; then
-        exit 0
-    fi
 fi
