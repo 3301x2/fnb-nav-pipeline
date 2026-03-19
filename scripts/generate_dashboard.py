@@ -303,9 +303,9 @@ tr:hover{{background:#f8fafc}}
 {''.join(f'<option value="{c}">{c}</option>' for c in cats)}
 </select>
 <label>Client</label>
-<select id="fClient" onchange="onFilter()"></select>
+<select id="fClient" onchange="renderPitch()"></select>
 <label>Competitors</label>
-<select id="fTopN" onchange="onFilter()">
+<select id="fTopN" onchange="renderPitch()">
 <option value="5">Top 5</option><option value="8" selected>Top 8</option><option value="15">Top 15</option><option value="999">All</option>
 </select>
 <div class="tog" id="anonToggle">
@@ -434,22 +434,29 @@ function showPage(n) {{
     currentPage = n;
     document.querySelectorAll('.pg').forEach((p,i) => p.classList.toggle('a', i===n));
     document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('a', i===n));
-    // Show/hide pitch filters
-    const fb = document.getElementById('filterbar');
-    fb.style.display = (n===0 || n===1) ? 'flex' : (n >= 2 ? 'none' : 'flex');
+    // Only show filters on Client Pitch
+    document.getElementById('filterbar').style.display = (n===1) ? 'flex' : 'none';
     if(n===1) renderPitch();
 }}
 
 // ─── Filter logic ───
 function onFilter() {{
     const cat = document.getElementById('fCat').value;
-    // Update client dropdown
-    const clients = [...new Set(D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).map(b=>b.DESTINATION))];
+    // Get clients sorted by total_spend descending (biggest first)
+    const catBench = D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).sort((a,b)=>b.total_spend-a.total_spend);
+    const clients = catBench.map(b=>b.DESTINATION);
+    // Remove duplicates while preserving order
+    const uniqueClients = [...new Set(clients)];
     const sel = document.getElementById('fClient');
     const prev = sel.value;
-    sel.innerHTML = clients.map(c=>`<option>${{c}}</option>`).join('');
-    if(clients.includes(prev)) sel.value = prev;
-    if(currentPage===1) renderPitch();
+    sel.innerHTML = uniqueClients.map(c=>`<option value="${{c}}">${{c}}</option>`).join('');
+    // Keep previous selection if it exists in new category, otherwise pick the #1 by spend
+    if(uniqueClients.includes(prev)) {{
+        sel.value = prev;
+    }} else if(uniqueClients.length > 0) {{
+        sel.value = uniqueClients[0];
+    }}
+    renderPitch();
 }}
 
 function setAnon(v) {{
@@ -507,17 +514,33 @@ function renderPitch() {{
     const topN = parseInt(document.getElementById('fTopN').value);
     if(!cat || !client) return;
 
-    // Filter benchmarks
-    let comps = D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).sort((a,b)=>b.total_spend-a.total_spend).slice(0, topN);
-    const ck = comps.find(c=>c.DESTINATION===client);
+    // Full list for this category (for client KPI lookup)
+    const allComps = D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).sort((a,b)=>b.total_spend-a.total_spend);
+    // Top N for competitor charts
+    let comps = allComps.slice(0, topN);
+    // Make sure selected client is always in the competitor list even if outside topN
+    if(!comps.find(c=>c.DESTINATION===client)) {{
+        const ck = allComps.find(c=>c.DESTINATION===client);
+        if(ck) comps.push(ck);
+    }}
+    // Client data (from full list)
+    const ck = allComps.find(c=>c.DESTINATION===client);
 
-    // KPIs
-    document.getElementById('cpKpis').innerHTML = ck ? (
-        card('Customers', num(ck.customers)) +
-        card('Total Spend', fmt(ck.total_spend)) +
-        card('Market Share', pct(ck.market_share_pct)) +
-        card('Penetration', pct(ck.penetration_pct))
-    ) : '<div class="empty">Client not found in this category</div>';
+    // KPIs — 8 cards
+    if(ck) {{
+        document.getElementById('cpKpis').innerHTML =
+            card('Customers', num(ck.customers)) +
+            card('Total Spend', fmt(ck.total_spend)) +
+            card('Market Share', pct(ck.market_share_pct)) +
+            card('Penetration', pct(ck.penetration_pct)) +
+            card('Avg Transaction', fmt(ck.avg_txn_value)) +
+            card('Spend/Customer', fmt(ck.spend_per_customer)) +
+            card('Rank in Category', '#'+ck.spend_rank) +
+            card('Share of Wallet', pct(ck.avg_share_of_wallet));
+    }} else {{
+        document.getElementById('cpKpis').innerHTML = '<div class="empty">Select a client from the dropdown above</div>';
+        return;
+    }}
 
     // Competitor charts
     const labels = comps.map((c,i) => destName(c.DESTINATION, client, i+1));
@@ -720,13 +743,17 @@ function renderAudiences() {{
 
 // ─── INIT ───
 function init() {{
+    // Hide filters on Overview (they only show on Client Pitch)
+    document.getElementById('filterbar').style.display = 'none';
+    // Populate client dropdown for first category
     onFilter();
+    // Render all static pages
     renderOverview();
     renderSegments();
     renderChurn();
     renderCategories();
     renderAudiences();
-    renderPitch();
+    // renderPitch is called by onFilter() already, and will run again when user clicks Client Pitch tab
 }}
 
 init();
