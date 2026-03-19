@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Looker Studio — Click-by-Click Guide</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#fafbfc;color:#1a202c;line-height:1.8;padding:20px}
+.c{max-width:800px;margin:0 auto}
+h1{font-size:2rem;font-weight:700;color:#0f172a;margin:40px 0 8px}
+h2{font-size:1.4rem;font-weight:700;color:#1e3a5f;margin:32px 0 8px;padding-top:20px;border-top:2px solid #e2e8f0}
+h3{font-size:1.1rem;font-weight:600;color:#0f172a;margin:24px 0 6px}
+p{margin:8px 0;font-size:.95rem}
+.do{background:#fff;border-radius:12px;padding:20px 24px;margin:14px 0;border-left:4px solid #1a73e8;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.do h4{font-size:.95rem;font-weight:600;color:#1a73e8;margin-bottom:8px}
+.do p{font-size:.9rem;margin:4px 0}
+.click{background:#eef2ff;border-radius:6px;padding:3px 8px;font-weight:600;font-size:.85rem;color:#4338ca;white-space:nowrap}
+.path{background:#f0fdf4;border-radius:6px;padding:3px 8px;font-size:.85rem;color:#166534;font-family:'JetBrains Mono',monospace}
+.field{background:#fef3c7;border-radius:6px;padding:3px 8px;font-size:.85rem;color:#92400e;font-family:'JetBrains Mono',monospace}
+.warn{background:#fef3c7;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:12px 16px;margin:12px 0;font-size:.9rem}
+.tip{background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 16px;margin:12px 0;font-size:.9rem}
+.danger{background:#fef2f2;border-left:4px solid #ef4444;border-radius:0 8px 8px 0;padding:12px 16px;margin:12px 0;font-size:.9rem}
+ol{margin:8px 0 8px 24px;font-size:.9rem}
+ol li{margin:6px 0}
+ul{margin:8px 0 8px 24px;font-size:.9rem}
+ul li{margin:4px 0}
+code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.82rem}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.85rem}
+th{background:#0f172a;color:white;padding:8px 10px;text-align:left;font-size:.8rem}
+td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
+.screenshot{background:#f1f5f9;border-radius:8px;padding:16px;margin:10px 0;font-size:.85rem;color:#64748b;text-align:center;font-style:italic}
+nav{position:sticky;top:0;background:#fff;padding:8px 0;border-bottom:1px solid #e2e8f0;z-index:10;margin-bottom:16px;overflow-x:auto;white-space:nowrap}
+nav a{display:inline-block;padding:4px 10px;margin:2px;border-radius:6px;text-decoration:none;color:#64748b;font-size:.8rem;font-weight:500}
+nav a:hover{background:#f1f5f9;color:#1e3a5f}
+.num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1a73e8;color:white;font-size:.75rem;font-weight:700;margin-right:8px;flex-shrink:0}
+</style>
+</head><body>
+<div class="c">
+
+<h1>Looker Studio — Click-by-Click Guide</h1>
+<p>Every single click. Nothing assumed. Follow top to bottom.</p>
+
+<nav>
+<a href="#start">Create report</a>
+<a href="#ds">Data sources</a>
+<a href="#rename">Rename sources</a>
+<a href="#p1">Overview page</a>
+<a href="#p2">Client pitch page</a>
+<a href="#p3">Segments page</a>
+<a href="#p4">Churn page</a>
+<a href="#p5">Categories page</a>
+<a href="#p6">Audiences page</a>
+<a href="#anon">Anonymization</a>
+<a href="#drill">Drill-downs</a>
+<a href="#theme">Theme</a>
+</nav>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="start">Create the report</h2>
+
+<div class="do"><h4><span class="num">1</span>Open Looker Studio</h4>
+<ol>
+<li>Open Chrome. Go to <code>lookerstudio.google.com</code></li>
+<li>Sign in with your FNB Google account (the one that has BigQuery access)</li>
+<li>You'll see a home page with "Recent reports" and a big <span class="click">+ Blank Report</span> button</li>
+<li>Click <span class="click">+ Blank Report</span></li>
+<li>A popup says "Add data to report". We'll do this next.</li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="ds">Add data sources</h2>
+<p>You need to connect each BigQuery table/view as a "data source". You do this once. Every page shares them.</p>
+
+<div class="do"><h4><span class="num">2</span>Add your first data source</h4>
+<ol>
+<li>The "Add data to report" popup should be showing. If not, look at the top menu bar and click <span class="click">Add data</span> (it's a button with a + icon)</li>
+<li>You'll see a list of connectors (Google Sheets, BigQuery, CSV, etc.)</li>
+<li>Click <span class="click">BigQuery</span></li>
+<li>On the left side you'll see a list. Click <span class="click">My Projects</span> (or "Shared Projects")</li>
+<li>Click <span class="click">fmn-sandbox</span> (that's your project)</li>
+<li>Click <span class="click">marts</span> (that's the dataset)</li>
+<li>You'll see a list of all tables and views. Click <span class="click">v_dashboard_overview</span></li>
+<li>Click <span class="click">ADD</span> (blue button, bottom right)</li>
+<li>A popup says "You are about to add data to this report". Click <span class="click">ADD TO REPORT</span></li>
+<li>Done! You'll see a table appear on the canvas. Ignore it for now — we'll delete it later.</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">3</span>Add the remaining data sources</h4>
+<p>Repeat the same process for each table below. Each time:</p>
+<ol>
+<li>Click <span class="click">Add data</span> in the top menu bar (or <span class="click">Resource</span> → <span class="click">Manage added data sources</span> → <span class="click">Add a data source</span>)</li>
+<li>Click <span class="click">BigQuery</span> → <span class="click">fmn-sandbox</span> → <span class="click">marts</span></li>
+<li>Select the table/view from the list</li>
+<li>Click <span class="click">ADD</span> → <span class="click">ADD TO REPORT</span></li>
+</ol>
+
+<p>Add all of these (you already did the first one):</p>
+<table>
+<tr><th>#</th><th>Find this in the list</th><th>What it's for</th></tr>
+<tr><td>1</td><td><code>v_dashboard_overview</code></td><td>Overview page KPIs</td></tr>
+<tr><td>2</td><td><code>v_dashboard_client_pitch</code></td><td>Client Pitch page (benchmarks + loyalty + time)</td></tr>
+<tr><td>3</td><td><code>v_pitch_internal</code></td><td>Client Pitch — real competitor names</td></tr>
+<tr><td>4</td><td><code>v_pitch_external</code></td><td>Client Pitch — anonymized names</td></tr>
+<tr><td>5</td><td><code>v_dashboard_segments</code></td><td>Segments page</td></tr>
+<tr><td>6</td><td><code>v_dashboard_churn</code></td><td>Churn & CLV page</td></tr>
+<tr><td>7</td><td><code>mart_category_scorecard</code></td><td>Categories page — health</td></tr>
+<tr><td>8</td><td><code>mart_category_affinity</code></td><td>Categories page — cross-sell</td></tr>
+<tr><td>9</td><td><code>mart_pitch_opportunities</code></td><td>Categories page — pitch opps</td></tr>
+<tr><td>10</td><td><code>mart_audience_catalog</code></td><td>Audiences page</td></tr>
+<tr><td>11</td><td><code>mart_monthly_trends</code></td><td>Client Pitch — trend line</td></tr>
+<tr><td>12</td><td><code>mart_demographic_summary</code></td><td>Client Pitch — age/gender/income</td></tr>
+<tr><td>13</td><td><code>mart_geo_summary</code></td><td>Client Pitch — geography</td></tr>
+<tr><td>14</td><td><code>mart_cohort_retention</code></td><td>Segments page — retention curve</td></tr>
+<tr><td>15</td><td><code>mart_spend_momentum</code></td><td>Segments page — momentum</td></tr>
+<tr><td>16</td><td><code>mart_category_propensity</code></td><td>Categories page — propensity</td></tr>
+<tr><td>17</td><td><code>mart_store_loyalty</code></td><td>Client Pitch — store loyalty</td></tr>
+<tr><td>18</td><td><code>mart_store_time_patterns</code></td><td>Client Pitch — time patterns</td></tr>
+</table>
+
+<div class="warn">If any table is missing from the list, it means that mart hasn't been built yet. Skip it and come back later. The dashboard will still work — that section will just be empty.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="rename">Rename data sources</h2>
+<p>This makes it easier to find the right source later when building charts.</p>
+
+<div class="do"><h4><span class="num">4</span>How to rename</h4>
+<ol>
+<li>In the top menu, click <span class="click">Resource</span></li>
+<li>In the dropdown, click <span class="click">Manage added data sources</span></li>
+<li>You'll see a list of all the sources you just added. They'll have names like <code>fmn-sandbox.marts.v_dashboard_overview</code></li>
+<li>For each one, look on the LEFT side of the row — you'll see a <span class="click">pencil icon ✏️</span> (edit button). Click it.</li>
+<li>At the TOP of the screen that opens, you'll see the long name. Click on it — it becomes editable.</li>
+<li>Type the short name (from the table below)</li>
+<li>Click <span class="click">Done</span> (top right)</li>
+<li>You're back at the list. Repeat for each source.</li>
+</ol>
+
+<table>
+<tr><th>Long name contains...</th><th>Rename to</th></tr>
+<tr><td>v_dashboard_overview</td><td>DS_Overview</td></tr>
+<tr><td>v_dashboard_client_pitch</td><td>DS_ClientPitch</td></tr>
+<tr><td>v_pitch_internal</td><td>DS_PitchInternal</td></tr>
+<tr><td>v_pitch_external</td><td>DS_PitchExternal</td></tr>
+<tr><td>v_dashboard_segments</td><td>DS_Segments</td></tr>
+<tr><td>v_dashboard_churn</td><td>DS_Churn</td></tr>
+<tr><td>mart_category_scorecard</td><td>DS_Categories</td></tr>
+<tr><td>mart_category_affinity</td><td>DS_Affinity</td></tr>
+<tr><td>mart_pitch_opportunities</td><td>DS_PitchOpps</td></tr>
+<tr><td>mart_audience_catalog</td><td>DS_Audiences</td></tr>
+<tr><td>mart_monthly_trends</td><td>DS_Trends</td></tr>
+<tr><td>mart_demographic_summary</td><td>DS_Demographics</td></tr>
+<tr><td>mart_geo_summary</td><td>DS_Geo</td></tr>
+<tr><td>mart_cohort_retention</td><td>DS_Retention</td></tr>
+<tr><td>mart_spend_momentum</td><td>DS_Momentum</td></tr>
+<tr><td>mart_category_propensity</td><td>DS_Propensity</td></tr>
+<tr><td>mart_store_loyalty</td><td>DS_StoreLoyalty</td></tr>
+<tr><td>mart_store_time_patterns</td><td>DS_StoreTime</td></tr>
+</table>
+
+<div class="tip">When you're done, click <span class="click">Close</span> at the bottom of the data sources list to go back to the report.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>Clean up the canvas</h2>
+
+<div class="do"><h4><span class="num">5</span>Delete the auto-generated tables</h4>
+<p>Every time you added a data source, Looker Studio may have dropped a table on the canvas. Delete them all:</p>
+<ol>
+<li>Click on any table/chart on the canvas</li>
+<li>Press <span class="click">Delete</span> on your keyboard (or right-click → Delete)</li>
+<li>Repeat until the canvas is blank</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">6</span>Rename the first page</h4>
+<ol>
+<li>Look at the bottom of the screen — you'll see page tabs (like Excel sheets)</li>
+<li>Right-click the tab that says "Page 1" (or "Untitled Page")</li>
+<li>Click <span class="click">Rename</span></li>
+<li>Type <code>Overview</code></li>
+<li>Press Enter</li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="p1">Page 1: Overview</h2>
+
+<div class="do"><h4><span class="num">7</span>Add a title</h4>
+<ol>
+<li>In the top toolbar, click <span class="click">Insert</span></li>
+<li>Click <span class="click">Text</span></li>
+<li>Draw a text box at the top of the canvas by clicking and dragging</li>
+<li>Type: <code>Executive Overview</code></li>
+<li>Select the text. In the right panel under "Text Properties", set font size to <code>24</code> and weight to <code>Bold</code></li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">8</span>Add the first scorecard (Transactions)</h4>
+<ol>
+<li>Click <span class="click">Insert</span> in the top toolbar</li>
+<li>Click <span class="click">Scorecard</span> (it looks like a single number)</li>
+<li>Draw a small rectangle on the canvas (about 200px wide, 80px tall)</li>
+<li>A scorecard appears. Look at the <strong>right panel</strong> — this is where you configure it</li>
+<li>At the top of the right panel, you'll see <strong>Data source</strong>. Click the dropdown and select <span class="click">DS_Overview</span></li>
+<li>Below that, you'll see <strong>Metric</strong>. Click the dropdown/pencil next to it</li>
+<li>Select <span class="field">total_transactions</span></li>
+<li>Make sure the aggregation says <code>SUM</code> (click the dropdown next to the field name if you need to change it)</li>
+<li>In the right panel, scroll down to <strong>Style</strong> tab. Set:
+    <ul>
+    <li>Font size: <code>28</code></li>
+    <li>Check "Compact number" (this turns 2237540286 into 2.2B)</li>
+    </ul>
+</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">9</span>Add the remaining 4 scorecards</h4>
+<p>The fastest way: right-click the scorecard you just made → <span class="click">Copy</span> → <span class="click">Paste</span>. Then change the metric:</p>
+<table>
+<tr><th>Scorecard</th><th>Metric field</th></tr>
+<tr><td>Customers</td><td><code>total_customers</code></td></tr>
+<tr><td>Segmented</td><td><code>segmented_customers</code></td></tr>
+<tr><td>Churn scored</td><td><code>churn_scored</code></td></tr>
+<tr><td>Destinations</td><td><code>destinations</code></td></tr>
+</table>
+<p>To change the metric on a pasted scorecard:</p>
+<ol>
+<li>Click the pasted scorecard</li>
+<li>In the right panel → <strong>Data</strong> tab → click the metric field</li>
+<li>Select the new field from the list</li>
+</ol>
+<p>Arrange all 5 in a row across the top of the page.</p>
+</div>
+
+<div class="do"><h4><span class="num">10</span>Add segment donut chart</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Pie chart</span></li>
+<li>Draw it on the canvas (about 300x250px)</li>
+<li>Right panel → <strong>Data source</strong>: select <span class="click">DS_Segments</span></li>
+<li><strong>Dimension</strong>: click the dimension field → select <span class="field">segment_name</span></li>
+<li><strong>Metric</strong>: click the metric field → select <span class="field">customers</span>. Set aggregation to <code>SUM</code></li>
+<li>Switch to <strong>Style</strong> tab (right panel, second tab at top)</li>
+<li>Find "Donut" or "Inner radius" → set to <code>60%</code> (this makes it a donut instead of a full pie)</li>
+<li>Under "Color" → click each segment and set:
+    <ul>
+    <li>Champions: <code>#0f172a</code></li>
+    <li>Loyal High Value: <code>#1e3a5f</code></li>
+    <li>Steady Mid-Tier: <code>#4CAF50</code></li>
+    <li>At Risk: <code>#FF9800</code></li>
+    <li>Dormant: <code>#f44336</code></li>
+    </ul>
+</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">11</span>Add churn headline scorecards</h4>
+<p>These show the "666K at risk / R31.6B spend" numbers.</p>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Scorecard</span></li>
+<li>Data source: <span class="click">DS_Churn</span></li>
+<li>Metric: <span class="field">total_spend</span> (SUM)</li>
+<li>Now you need a filter to show only Critical + High risk:
+    <ol>
+    <li>In the right panel, scroll down to <strong>Filter</strong></li>
+    <li>Click <span class="click">Add a filter</span></li>
+    <li>Click <span class="click">Create a filter</span></li>
+    <li>Name it: <code>Critical + High only</code></li>
+    <li>Set: <span class="field">churn_risk_level</span> → <code>Include</code> → <code>In</code> → type <code>Critical</code>, press Enter, type <code>High</code>, press Enter</li>
+    <li>Click <span class="click">Save</span></li>
+    </ol>
+</li>
+<li>The scorecard now shows spend at risk for Critical + High only</li>
+</ol>
+<p>Copy this scorecard twice. Change one to metric = <code>Record Count</code> (this counts customers). Change the other to a calculated field for 10% recovery (or just manually label it).</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="p2">Page 2: Client Pitch</h2>
+
+<div class="do"><h4><span class="num">12</span>Create a new page</h4>
+<ol>
+<li>Look at the bottom of the screen where the page tabs are</li>
+<li>Click the <span class="click">+</span> icon (right side of the tabs) to add a new page</li>
+<li>Right-click the new tab → <span class="click">Rename</span> → type <code>Client Pitch</code></li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">13</span>Add Category dropdown filter</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Drop-down list</span> (under "Add a control")</li>
+<li>Draw it at the top left of the page</li>
+<li>Right panel → <strong>Data source</strong>: <span class="click">DS_ClientPitch</span></li>
+<li><strong>Control field</strong>: click it → select <span class="field">CATEGORY_TWO</span></li>
+<li>In the <strong>Style</strong> tab, you can set a label: type <code>Category</code></li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">14</span>Add Client dropdown filter</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Drop-down list</span></li>
+<li>Draw it next to the Category dropdown</li>
+<li>Data source: <span class="click">DS_ClientPitch</span> (SAME source — this is important so they cross-filter)</li>
+<li>Control field: <span class="field">DESTINATION</span></li>
+<li>Label: <code>Client</code></li>
+</ol>
+<div class="warn">Both dropdowns MUST use the same data source (DS_ClientPitch). If they use different sources, selecting a category won't filter the client list.</div>
+</div>
+
+<div class="do"><h4><span class="num">15</span>Add 8 KPI scorecards</h4>
+<p>Same process as the Overview page. All use data source <span class="click">DS_ClientPitch</span>.</p>
+<table>
+<tr><th>Label</th><th>Metric field</th><th>Aggregation</th></tr>
+<tr><td>Customers</td><td><code>customers</code></td><td>SUM</td></tr>
+<tr><td>Total Spend</td><td><code>total_spend</code></td><td>SUM</td></tr>
+<tr><td>Market Share</td><td><code>market_share_pct</code></td><td>AVG</td></tr>
+<tr><td>Penetration</td><td><code>penetration_pct</code></td><td>AVG</td></tr>
+<tr><td>Avg Transaction</td><td><code>avg_txn_value</code></td><td>AVG</td></tr>
+<tr><td>Spend/Customer</td><td><code>spend_per_customer</code></td><td>AVG</td></tr>
+<tr><td>Rank</td><td><code>spend_rank</code></td><td>AVG</td></tr>
+<tr><td>Share of Wallet</td><td><code>avg_loyalty_pct</code></td><td>AVG</td></tr>
+</table>
+<p>Build the first one, then copy-paste and change the metric for each.</p>
+</div>
+
+<div class="do"><h4><span class="num">16</span>Add competitor benchmark bar chart</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Bar chart</span></li>
+<li>Draw it below the scorecards</li>
+<li>Data source: <span class="click">DS_ClientPitch</span></li>
+<li>Dimension: <span class="field">DESTINATION</span></li>
+<li>Metric: <span class="field">market_share_pct</span> (AVG)</li>
+<li><strong>Sort</strong>: In the right panel, find "Sort" → set to <span class="field">market_share_pct</span> → <code>Descending</code></li>
+<li><strong>Style</strong> tab:
+    <ul>
+    <li>Check "Horizontal" (this makes bars go left-to-right instead of up-down)</li>
+    <li>Number of bars: <code>8</code></li>
+    <li>Bar color: <code>#0f172a</code></li>
+    </ul>
+</li>
+</ol>
+<p>Duplicate this chart (right-click → Copy → Paste). Change the metric to <span class="field">spend_per_customer</span>. Place them side by side.</p>
+</div>
+
+<div class="do"><h4><span class="num">17</span>Add store loyalty chart</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Bar chart</span> (horizontal)</li>
+<li>Data source: <span class="click">DS_StoreLoyalty</span></li>
+<li>Dimension: <span class="field">DESTINATION</span></li>
+<li>Metric: <span class="field">pct_loyal_50</span> (AVG)</li>
+<li>Sort: pct_loyal_50 descending</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">18</span>Add time patterns table</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Table</span></li>
+<li>Data source: <span class="click">DS_StoreTime</span></li>
+<li>Dimension: <span class="field">DESTINATION</span></li>
+<li>Metrics (add all of these — click the <span class="click">+</span> next to Metric to add more):
+    <ul>
+    <li><span class="field">pct_early_morning</span> (AVG)</li>
+    <li><span class="field">pct_mid_morning</span> (AVG)</li>
+    <li><span class="field">pct_afternoon</span> (AVG)</li>
+    <li><span class="field">pct_evening</span> (AVG)</li>
+    <li><span class="field">pct_weekend</span> (AVG)</li>
+    </ul>
+</li>
+<li><strong>Style</strong> tab → find "Heatmap" → turn it on. This colors cells darker for higher values.</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">19</span>Add trend line</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Time series chart</span> (it looks like a line chart with a clock icon)</li>
+<li>Data source: <span class="click">DS_Trends</span></li>
+<li>Date dimension: <span class="field">month</span></li>
+<li>Breakdown dimension: <span class="field">DESTINATION</span></li>
+<li>Metric: <span class="field">total_spend</span> (SUM)</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">20</span>Add demographics (3 charts)</h4>
+<p>All use data source <span class="click">DS_Demographics</span>:</p>
+<ol>
+<li><strong>Age bar chart</strong>: Insert → Bar chart. Dimension: <span class="field">age_group</span>. Metric: <span class="field">customers</span> (SUM)</li>
+<li><strong>Gender donut</strong>: Insert → Pie chart. Dimension: <span class="field">gender_label</span>. Metric: <span class="field">customers</span> (SUM). Style → Donut 60%</li>
+<li><strong>Income bar chart</strong>: Insert → Bar chart. Dimension: <span class="field">income_group</span>. Metric: <span class="field">total_spend</span> (SUM)</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">21</span>Add geography chart</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Bar chart</span> (horizontal)</li>
+<li>Data source: <span class="click">DS_Geo</span></li>
+<li>Dimension: <span class="field">PROVINCE</span></li>
+<li>Metric: <span class="field">total_spend</span> (SUM)</li>
+<li>Sort: total_spend descending</li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="p3">Page 3: Segments</h2>
+
+<div class="do"><h4><span class="num">22</span>Create page + filter</h4>
+<ol>
+<li>Click <span class="click">+</span> to add a new page. Rename to <code>Segments</code></li>
+<li>Insert → Drop-down list. Data source: <span class="click">DS_Segments</span>. Control field: <span class="field">segment_name</span></li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">23</span>Add segment profiles table</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Table</span></li>
+<li>Data source: <span class="click">DS_Segments</span></li>
+<li>Dimension: <span class="field">segment_name</span></li>
+<li>Metrics: <span class="field">customers</span> (SUM), <span class="field">avg_spend</span> (AVG), <span class="field">avg_txns</span> (AVG), <span class="field">avg_recency_days</span> (AVG), <span class="field">avg_merchants</span> (AVG), <span class="field">pct_weekend</span> (AVG)</li>
+<li>Sort: avg_spend descending</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">24</span>Add retention curve</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Line chart</span></li>
+<li>Data source: <span class="click">DS_Retention</span></li>
+<li>Dimension: <span class="field">months_since_first</span></li>
+<li>Metric: <span class="field">retention_pct</span> (AVG)</li>
+<li>Style: Line color <code>#0f172a</code>. Check "Show data points".</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">25</span>Add momentum table</h4>
+<ol>
+<li><span class="click">Insert</span> → <span class="click">Table</span></li>
+<li>Data source: <span class="click">DS_Momentum</span></li>
+<li>Dimension: <span class="field">momentum_status</span></li>
+<li>Metrics: Record Count (label it "Customers"), <span class="field">total_spend_12m</span> (AVG), <span class="field">spend_change_pct</span> (AVG), <span class="field">urgency_score</span> (AVG)</li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="p4">Page 4: Churn & CLV</h2>
+
+<div class="do"><h4><span class="num">26</span>Create page + filters</h4>
+<ol>
+<li>New page → rename <code>Churn & CLV</code></li>
+<li>Add 3 dropdowns, all using <span class="click">DS_Churn</span>:
+    <ul>
+    <li>Control field: <span class="field">churn_risk_level</span></li>
+    <li>Control field: <span class="field">clv_tier</span></li>
+    <li>Control field: <span class="field">segment_name</span></li>
+    </ul>
+</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">27</span>Add churn content</h4>
+<ol>
+<li><strong>3 scorecards</strong> (same as Overview step 11 — DS_Churn with Critical+High filter)</li>
+<li><strong>Churn drivers bar chart</strong>: Insert → Bar chart (horizontal). DS_Churn. Dimension: <span class="field">reason_1</span>. Metric: Record Count. Sort descending. Add the Critical+High filter.</li>
+<li><strong>CLV table</strong>: Insert → Table. DS_Churn. Dimension: <span class="field">clv_tier</span>. Metrics: Record Count, <span class="field">predicted_clv</span> (AVG), <span class="field">historical_spend</span> (AVG).</li>
+<li><strong>Risk breakdown table</strong>: Insert → Table. DS_Churn. Dimension: <span class="field">churn_risk_level</span>. Metrics: Record Count, <span class="field">churn_probability</span> (AVG), <span class="field">total_spend</span> (SUM), <span class="field">days_since_last</span> (AVG).</li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="p5">Page 5: Categories</h2>
+
+<div class="do"><h4><span class="num">28</span>Create page + content</h4>
+<ol>
+<li>New page → rename <code>Categories</code></li>
+<li>Dropdown: DS_Categories, field: <span class="field">CATEGORY_TWO</span></li>
+<li><strong>Health table</strong>: DS_Categories. Dimension: <span class="field">CATEGORY_TWO</span>. Metrics: <span class="field">total_customers</span>, <span class="field">total_spend</span>, <span class="field">growth_pct</span>, <span class="field">avg_churn_pct</span>, <span class="field">health_status</span>.</li>
+<li><strong>Affinity table</strong>: DS_Affinity. Dimensions: <span class="field">category_a</span>, <span class="field">category_b</span>. Metrics: <span class="field">shared_customers</span> (SUM), <span class="field">lift</span> (AVG).</li>
+<li><strong>Propensity table</strong>: DS_Propensity. Dimensions: <span class="field">segment_name</span>, <span class="field">CATEGORY_TWO</span>. Metrics: <span class="field">unadopted_customers</span>, <span class="field">potential_revenue</span>.</li>
+<li><strong>Pitch opps table</strong>: DS_PitchOpps. Dimensions: <span class="field">DESTINATION</span>, <span class="field">CATEGORY_TWO</span>. Metrics: <span class="field">pitch_score</span>, <span class="field">addressable_market</span>, <span class="field">market_share_pct</span>.</li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="p6">Page 6: Audiences</h2>
+
+<div class="do"><h4><span class="num">29</span>Create page + content</h4>
+<ol>
+<li>New page → rename <code>Audiences</code></li>
+<li>Dropdowns (all DS_Audiences): <span class="field">audience_type</span>, <span class="field">top_province</span></li>
+<li><strong>3 scorecards</strong>: DS_Audiences.
+    <ul>
+    <li>Record Count (label: "Total audiences")</li>
+    <li><span class="field">audience_size</span> SUM (label: "Total reachable")</li>
+    <li><span class="field">audience_size</span> AVG (label: "Avg size")</li>
+    </ul>
+</li>
+<li><strong>Catalog table</strong>: DS_Audiences. Dimensions: <span class="field">audience_name</span>, <span class="field">audience_type</span>. Metrics: <span class="field">audience_size</span>, <span class="field">avg_spend</span>, <span class="field">avg_age</span>, <span class="field">pct_female</span>, <span class="field">top_province</span>, <span class="field">description</span>.</li>
+</ol>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="anon">Anonymization (Internal vs External)</h2>
+
+<div class="do"><h4><span class="num">30</span>Duplicate Client Pitch page</h4>
+<ol>
+<li>Right-click the <code>Client Pitch</code> tab at the bottom</li>
+<li>Click <span class="click">Duplicate page</span></li>
+<li>Right-click the new tab → Rename → <code>Client Pitch (External)</code></li>
+<li>On this new page, click each chart that shows competitor names (the benchmark bars, time patterns table, loyalty chart)</li>
+<li>For each chart: in the right panel, click the data source dropdown and change from <span class="click">DS_PitchInternal</span> (or DS_ClientPitch) to <span class="click">DS_PitchExternal</span></li>
+<li>Then change the dimension from <span class="field">DESTINATION</span> to <span class="field">display_name</span></li>
+</ol>
+<p>Now: Internal page = real names. External page = "Competitor #1, #2, #3..."</p>
+<div class="tip">To hide the external page during internal use: right-click tab → <span class="click">Hide in view mode</span>. Unhide it when you need to present to a client.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="drill">Drill-downs</h2>
+
+<div class="do"><h4><span class="num">31</span>Add drill-down to geography chart</h4>
+<ol>
+<li>Click the geography bar chart on the Client Pitch page</li>
+<li>In the right panel → <strong>Data</strong> tab</li>
+<li>Find the <strong>Drill down</strong> toggle → turn it <span class="click">ON</span></li>
+<li>You'll see the dimension <span class="field">PROVINCE</span> already there</li>
+<li>Click the <span class="click">+</span> below it to add another dimension</li>
+<li>Select <span class="field">MUNICIPALITY</span></li>
+<li>Now when a user clicks a province bar, it drills into municipalities</li>
+</ol>
+<p>Repeat this pattern for any chart where you want drill-down.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="theme">Theme & branding</h2>
+
+<div class="do"><h4><span class="num">32</span>Set theme</h4>
+<ol>
+<li>Click <span class="click">Theme and layout</span> in the top menu</li>
+<li>Click <span class="click">Custom</span></li>
+<li>Set:
+    <ul>
+    <li>Primary color: <code>#1e3a5f</code></li>
+    <li>Secondary color: <code>#2E75B6</code></li>
+    <li>Font: <code>Roboto</code> (or Google Sans)</li>
+    <li>Background: <code>#fafbfc</code></li>
+    </ul>
+</li>
+</ol>
+</div>
+
+<div class="do"><h4><span class="num">33</span>Share the dashboard</h4>
+<ol>
+<li>Click <span class="click">Share</span> button (top right, blue)</li>
+<li>Add email addresses, or set to "Anyone in the organization with the link can view"</li>
+<li>For external clients: never share the link. Instead: File → Download as PDF.</li>
+</ol>
+</div>
+
+<h2>You're done!</h2>
+<p>6 pages, 18 data sources, filters on every page, drill-downs, anonymization toggle. Go check it in View mode (click the eye icon top right).</p>
+
+</div>
+</body></html>
