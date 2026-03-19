@@ -31,8 +31,43 @@ set -euo pipefail
 # ════════════════════════════════════════════════════════════════
 
 # ── Configuration ──────────────────────────────────────────────
-PROJECT_ID="${BQ_PROJECT_ID:-fmn-sandbox}"
-LOCATION="US"
+# ── Environment ────────────────────────────────────────────────
+# Usage:
+#   bash scripts/run.sh sandbox          → all steps on fmn-sandbox
+#   bash scripts/run.sh production 3     → step 3 on fmn-production
+#   bash scripts/run.sh sandbox 1        → step 1 on fmn-sandbox
+
+ENV="${1:-sandbox}"
+STEP="${2:-all}"
+
+case "${ENV}" in
+    sandbox|dev|sb)
+        PROJECT_ID="fmn-sandbox"
+        ;;
+    production|prod|prd)
+        PROJECT_ID="fmn-production"
+        ;;
+    *)
+        # If first arg looks like a step number, assume sandbox
+        if [[ "${ENV}" =~ ^[0-5]$|^all$ ]]; then
+            STEP="${ENV}"
+            PROJECT_ID="fmn-sandbox"
+            ENV="sandbox"
+        else
+            echo "Unknown environment: ${ENV}"
+            echo "Usage: bash scripts/run.sh [sandbox|production] [0-5|all]"
+            echo ""
+            echo "Examples:"
+            echo "  bash scripts/run.sh sandbox       → full pipeline on fmn-sandbox"
+            echo "  bash scripts/run.sh production 3   → step 3 on fmn-production"
+            echo "  bash scripts/run.sh sandbox 1      → step 1 on fmn-sandbox"
+            echo "  bash scripts/run.sh 3              → step 3 on fmn-sandbox (default)"
+            exit 1
+        fi
+        ;;
+esac
+
+LOCATION="africa-south1"
 
 # Source datasets (where raw data lives)
 RAW_DATASET="customer_spend"
@@ -63,11 +98,12 @@ run_sql() {
     local file="$1"
     local desc="$2"
     log "Running: ${desc}"
+    # Replace placeholder with actual project ID at runtime
+    sed "s/__PROJECT__/${PROJECT_ID}/g" "${file}" | \
     bq query \
         --use_legacy_sql=false \
         --project_id="${PROJECT_ID}" \
         --max_rows=0 \
-        < "${file}" \
     && ok "${desc}" \
     || fail "${desc} — query failed"
 }
@@ -79,16 +115,14 @@ elapsed() {
     echo "$((diff / 60))m $((diff % 60))s"
 }
 
-# ── Step argument ──────────────────────────────────────────────
-STEP="${1:-all}"
-
 # ── Pre-flight checks ─────────────────────────────────────────
 echo ""
 echo "════════════════════════════════════════════════════════════"
 echo "  FNB NAV Pipeline"
-echo "  Project: ${PROJECT_ID}"
-echo "  Step:    ${STEP}"
-echo "  Started: $(date)"
+echo "  Environment: ${ENV}"
+echo "  Project:     ${PROJECT_ID}"
+echo "  Step:        ${STEP}"
+echo "  Started:     $(date)"
 echo "════════════════════════════════════════════════════════════"
 echo ""
 
@@ -218,7 +252,7 @@ if [[ "${STEP}" == "all" || "${STEP}" == "3" ]]; then
     run_sql "${SQL_DIR}/03_ml/train_churn_model.sql" \
         "Churn classifier training (logistic regression, 15 features)"
 
-    bq rm -f fmn-sandbox:marts.mart_churn_risk 2>/dev/null || true
+    bq rm -f ${PROJECT_ID}:marts.mart_churn_risk 2>/dev/null || true
 
     run_sql "${SQL_DIR}/03_ml/predict_churn.sql" \
         "Churn prediction → probability scores → mart_churn_risk"
@@ -244,11 +278,11 @@ fi
 
 # ══════════════════════════════════════════════════════════════
 # STEP 4: Marts
-# Creates: 8 mart tables (dashboard-ready)
+# Creates: 10 mart tables + 2 audience tables (dashboard-ready)
 # Depends: Steps 1-3 (all upstream tables + model must exist)
 # ══════════════════════════════════════════════════════════════
 if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
-    log "STEP 4: Mart layer (7 tables — churn already built in step 3)"
+    log "STEP 4: Mart layer (10 tables — churn already built in step 3)"
     STEP_START=$(date +%s)
 
     run_sql "${SQL_DIR}/04_marts/mart_cluster_profiles.sql" \
@@ -272,6 +306,15 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
     run_sql "${SQL_DIR}/04_marts/mart_destination_benchmarks.sql" \
         "mart_destination_benchmarks (all destinations — dashboard anonymizes competitors)"
 
+    run_sql "${SQL_DIR}/04_marts/mart_store_loyalty.sql" \
+        "mart_store_loyalty (loyalty bands per store per category)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_store_time_patterns.sql" \
+        "mart_store_time_patterns (time-of-day, day-of-week by store)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_audience_catalog.sql" \
+        "mart_audience_members + mart_audience_catalog (pre-packaged audiences)"
+
     ok "Step 4 complete ($(elapsed ${STEP_START}))"
     echo ""
     echo "  ✅ Check BigQuery:"
@@ -282,7 +325,11 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
     echo "     UNION ALL SELECT 'churn', COUNT(*) FROM marts.mart_churn_risk"
     echo "     UNION ALL SELECT 'trends', COUNT(*) FROM marts.mart_monthly_trends"
     echo "     UNION ALL SELECT 'demographics', COUNT(*) FROM marts.mart_demographic_summary"
-    echo "     UNION ALL SELECT 'benchmarks', COUNT(*) FROM marts.mart_destination_benchmarks;"
+    echo "     UNION ALL SELECT 'benchmarks', COUNT(*) FROM marts.mart_destination_benchmarks"
+    echo "     UNION ALL SELECT 'store_loyalty', COUNT(*) FROM marts.mart_store_loyalty"
+    echo "     UNION ALL SELECT 'store_time', COUNT(*) FROM marts.mart_store_time_patterns"
+    echo "     UNION ALL SELECT 'audience_members', COUNT(*) FROM marts.mart_audience_members"
+    echo "     UNION ALL SELECT 'audience_catalog', COUNT(*) FROM marts.mart_audience_catalog;"
     echo ""
     if [[ "${STEP}" == "4" ]]; then
         echo "  Next: bash scripts/run.sh 5"
@@ -299,7 +346,38 @@ if [[ "${STEP}" == "all" || "${STEP}" == "5" ]]; then
     bash "${SCRIPT_DIR}/validate.sh" "${PROJECT_ID}"
     echo ""
     if [[ "${STEP}" == "5" ]]; then
-        echo "  Next: streamlit run dashboards/app.py"
+        echo "  Next: bash scripts/run.sh [env] 6  (Looker Studio views)"
+        exit 0
+    fi
+fi
+
+
+# ══════════════════════════════════════════════════════════════
+# STEP 6: Looker Studio Views
+# Creates: views in marts dataset for Looker Studio
+# Depends: Steps 1-4 (all mart tables must exist)
+# ══════════════════════════════════════════════════════════════
+if [[ "${STEP}" == "all" || "${STEP}" == "6" ]]; then
+    log "STEP 6: Looker Studio views"
+    STEP_START=$(date +%s)
+
+    run_sql "${SQL_DIR}/05_looker_views/create_views.sql" \
+        "Looker Studio views (original 10 views)"
+
+    run_sql "${SQL_DIR}/05_looker_views/v_pitch_views.sql" \
+        "Pitch views (v_pitch_internal + v_pitch_external for anonymization)"
+
+    run_sql "${SQL_DIR}/05_looker_views/v_dashboard_views.sql" \
+        "Dashboard views (overview, segments, churn, client pitch)"
+
+    ok "Step 6 complete ($(elapsed ${STEP_START}))"
+    echo ""
+    echo "  ✅ Views created. Generate Looker Studio dashboards:"
+    echo "     python scripts/looker_generator.py --all-views"
+    echo "     python scripts/looker_generator.py --client Adidas --category 'Clothing & Apparel'"
+    echo ""
+    if [[ "${STEP}" == "6" ]]; then
+        echo "  Next: python scripts/looker_generator.py"
         exit 0
     fi
 fi
@@ -314,7 +392,7 @@ if [[ "${STEP}" == "all" ]]; then
     echo "  Finished: $(date)"
     echo ""
     echo "  Next steps:"
-    echo "    pip install -r dashboards/requirements.txt"
-    echo "    streamlit run dashboards/app.py"
+    echo "    python scripts/generate_report_v3.py             # HTML/PDF report"
+    echo "    python scripts/looker_generator.py --all-views   # Looker Studio"
     echo "════════════════════════════════════════════════════════════"
 fi
