@@ -151,6 +151,76 @@ propensity = safe(f"""
 print('  audiences')
 audiences = safe(f"SELECT * FROM `{PROJECT}.marts.mart_audience_catalog` ORDER BY audience_size DESC")
 
+print('  audience details (top categories per audience)')
+aud_categories = safe(f"""
+    SELECT am.audience_id, cs.CATEGORY_TWO,
+        COUNT(DISTINCT am.UNIQUE_ID) AS customers,
+        ROUND(SUM(cs.dest_spend),0) AS spend
+    FROM `{PROJECT}.marts.mart_audience_members` am
+    JOIN `{PROJECT}.analytics.int_customer_category_spend` cs ON am.UNIQUE_ID = cs.UNIQUE_ID
+    GROUP BY 1,2
+    HAVING customers >= 50
+    ORDER BY 1, spend DESC
+""")
+
+print('  audience details (top merchants per audience)')
+aud_merchants = safe(f"""
+    SELECT am.audience_id, cs.DESTINATION,
+        COUNT(DISTINCT am.UNIQUE_ID) AS customers,
+        ROUND(SUM(cs.dest_spend),0) AS spend
+    FROM `{PROJECT}.marts.mart_audience_members` am
+    JOIN `{PROJECT}.analytics.int_customer_category_spend` cs ON am.UNIQUE_ID = cs.UNIQUE_ID
+    GROUP BY 1,2
+    HAVING customers >= 50
+    ORDER BY 1, spend DESC
+""")
+
+print('  audience details (age breakdown per audience)')
+aud_age = safe(f"""
+    SELECT am.audience_id, c.age_group, COUNT(*) AS customers
+    FROM `{PROJECT}.marts.mart_audience_members` am
+    JOIN `{PROJECT}.staging.stg_customers` c ON am.UNIQUE_ID = c.UNIQUE_ID
+    WHERE c.age_group IS NOT NULL
+    GROUP BY 1,2 ORDER BY 1,2
+""")
+
+print('  audience details (income breakdown per audience)')
+aud_income = safe(f"""
+    SELECT am.audience_id, c.income_group, COUNT(*) AS customers
+    FROM `{PROJECT}.marts.mart_audience_members` am
+    JOIN `{PROJECT}.staging.stg_customers` c ON am.UNIQUE_ID = c.UNIQUE_ID
+    WHERE c.income_group IS NOT NULL AND c.income_group != 'Unknown'
+    GROUP BY 1,2 ORDER BY 1,2
+""")
+
+print('  audience details (gender breakdown per audience)')
+aud_gender = safe(f"""
+    SELECT am.audience_id, c.gender_label, COUNT(*) AS customers
+    FROM `{PROJECT}.marts.mart_audience_members` am
+    JOIN `{PROJECT}.staging.stg_customers` c ON am.UNIQUE_ID = c.UNIQUE_ID
+    WHERE c.gender_label IS NOT NULL AND c.gender_label != 'Unknown'
+    GROUP BY 1,2 ORDER BY 1,2
+""")
+
+print('  audience details (province — using catalog top_province)')
+# Province per audience is already in the catalog as top_province.
+# For a fuller breakdown we'd need to scan stg_transactions which is expensive (~R30+).
+# So we build a simple breakdown from the geographic audiences we already know,
+# and show top_province for the rest.
+aud_province = safe(f"""
+    SELECT am.audience_id, am.audience_name, am.audience_type,
+        CASE
+            WHEN am.audience_id = 'G01' THEN 'GAUTENG'
+            WHEN am.audience_id = 'G02' THEN 'WESTERN CAPE'
+            WHEN am.audience_id = 'G03' THEN 'KWAZULU-NATAL'
+            WHEN am.audience_id = 'G04' THEN 'EASTERN CAPE'
+            ELSE am.top_province
+        END AS PROVINCE,
+        am.audience_size AS customers,
+        ROUND(am.avg_spend * am.audience_size, 0) AS spend
+    FROM `{PROJECT}.marts.mart_audience_catalog` am
+""")
+
 print('  demographics (by category)')
 demo = safe(f"""
     SELECT CATEGORY_TWO, age_group, gender_label, income_group,
@@ -217,6 +287,12 @@ data_json = json.dumps({
     'affinity': json.loads(to_json(affinity)),
     'propensity': json.loads(to_json(propensity)),
     'audiences': json.loads(to_json(audiences)),
+    'aud_categories': json.loads(to_json(aud_categories)),
+    'aud_merchants': json.loads(to_json(aud_merchants)),
+    'aud_age': json.loads(to_json(aud_age)),
+    'aud_income': json.loads(to_json(aud_income)),
+    'aud_gender': json.loads(to_json(aud_gender)),
+    'aud_province': json.loads(to_json(aud_province)),
     'demo': json.loads(to_json(demo)),
     'geo': json.loads(to_json(geo)),
     'trends': json.loads(to_json(trends)),
@@ -285,6 +361,33 @@ body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
 .aud-filters select{{padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit}}
 .aud-filters input{{padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit;width:180px}}
 .aud-count{{font-size:.82rem;color:#94a3b8;margin-left:auto}}
+.modal-overlay{{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:100;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto}}
+.modal-overlay.show{{display:flex}}
+.modal{{background:#fff;border-radius:16px;max-width:900px;width:100%;max-height:calc(100vh - 80px);overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}}
+.modal-hdr{{position:sticky;top:0;background:#fff;padding:20px 24px 16px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:flex-start;z-index:1;border-radius:16px 16px 0 0}}
+.modal-hdr h2{{font-size:1.2rem;font-weight:700;color:#0f172a;margin:0}}
+.modal-hdr .mtype{{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}}
+.modal-hdr .mdesc{{font-size:.82rem;color:#64748b;margin-top:4px;line-height:1.5}}
+.modal-close{{background:none;border:none;font-size:1.5rem;cursor:pointer;color:#94a3b8;padding:0 4px;line-height:1}}
+.modal-close:hover{{color:#0f172a}}
+.modal-body{{padding:20px 24px 24px}}
+.modal-stats{{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}}
+.modal-stat{{background:#f8fafc;border-radius:8px;padding:12px;text-align:center}}
+.modal-stat .n{{font-size:1.2rem;font-weight:600;color:#0f172a}}
+.modal-stat .l{{font-size:.68rem;color:#94a3b8;margin-top:2px}}
+.modal-section{{margin-bottom:20px}}
+.modal-section h3{{font-size:.85rem;font-weight:600;color:#0f172a;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f1f5f9}}
+.modal-bars{{display:flex;flex-direction:column;gap:6px}}
+.modal-bar{{display:flex;align-items:center;gap:8px}}
+.modal-bar .lbl{{font-size:.78rem;color:#64748b;width:120px;text-align:right;flex-shrink:0}}
+.modal-bar .track{{flex:1;height:20px;background:#f1f5f9;border-radius:4px;overflow:hidden}}
+.modal-bar .fill{{height:100%;border-radius:4px;transition:width .3s}}
+.modal-bar .val{{font-size:.78rem;color:#0f172a;font-weight:500;width:60px}}
+.modal-row{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+@media(max-width:768px){{.modal-row{{grid-template-columns:1fr}}.modal-stats{{grid-template-columns:repeat(3,1fr)}}}}
+.modal-channels{{display:flex;gap:8px;margin:12px 0}}
+.modal-ch{{padding:6px 16px;border-radius:6px;font-size:.8rem;font-weight:600;color:#fff}}
+.aud-card{{cursor:pointer}}
 .row{{display:grid;gap:12px;margin-bottom:14px}}
 .r2{{grid-template-columns:1fr 1fr}}.r3{{grid-template-columns:1fr 1fr 1fr}}.r4{{grid-template-columns:1fr 1fr 1fr 1fr}}.r5{{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:768px){{.r2,.r3,.r4,.r5{{grid-template-columns:1fr}}}}
@@ -423,6 +526,40 @@ tr:hover{{background:#f8fafc}}
 <span class="aud-count" id="audCount"></span>
 </div>
 <div class="aud-grid" id="audGrid"></div>
+</div>
+
+<!-- AUDIENCE DETAIL MODAL -->
+<div class="modal-overlay" id="audModal" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+<div class="modal-hdr">
+<div>
+<div class="mtype" id="modalType"></div>
+<h2 id="modalName"></h2>
+<div class="mdesc" id="modalDesc"></div>
+</div>
+<button class="modal-close" onclick="closeModal()">&times;</button>
+</div>
+<div class="modal-body">
+<div class="modal-stats" id="modalStats"></div>
+<div class="modal-channels" id="modalChannels">
+<span class="modal-ch" style="background:#1877f2">Meta</span>
+<span class="modal-ch" style="background:#ea4335">Google</span>
+<span class="modal-ch" style="background:#000">TikTok</span>
+</div>
+<div class="modal-row">
+<div class="modal-section"><h3>Top categories by spend</h3><div class="modal-bars" id="modalCats"></div></div>
+<div class="modal-section"><h3>Top merchants by spend</h3><div class="modal-bars" id="modalMerch"></div></div>
+</div>
+<div class="modal-row">
+<div class="modal-section"><h3>Age distribution</h3><div class="modal-bars" id="modalAge"></div></div>
+<div class="modal-section"><h3>Income distribution</h3><div class="modal-bars" id="modalIncome"></div></div>
+</div>
+<div class="modal-row">
+<div class="modal-section"><h3>Gender split</h3><div class="modal-bars" id="modalGender"></div></div>
+<div class="modal-section"><h3>Provincial distribution</h3><div class="modal-bars" id="modalProv"></div></div>
+</div>
+</div>
+</div>
 </div>
 
 <div class="ftr">NAV Analytics Dashboard · {PROJECT} · Built by Prosper Sikhwari · {datetime.now().strftime('%B %Y')}</div>
@@ -796,7 +933,7 @@ function renderAudiences() {{
         const useCase = uses[i % uses.length] || '';
 
         html += `
-        <div class="aud-card">
+        <div class="aud-card" onclick="openModal('${{a.audience_id}}')">
             <div class="aud-top" style="background:${{tc.top}}"></div>
             <div class="aud-body">
                 <div class="aud-type" style="color:${{tc.color}}">${{tc.icon}} ${{a.audience_type}}</div>
@@ -830,6 +967,97 @@ function renderAudiences() {{
 
     document.getElementById('audGrid').innerHTML = html || '<div class="empty">No audiences match your filters</div>';
 }}
+
+// ─── MODAL: Audience detail ───
+function openModal(audId) {{
+    const a = (D.audiences||[]).find(x=>x.audience_id===audId);
+    if(!a) return;
+
+    const typeConfig = {{
+        'Demographic': {{color:'#1e40af',bg:'#dbeafe'}},
+        'Lifestyle': {{color:'#166534',bg:'#dcfce7'}},
+        'Behavioral': {{color:'#991b1b',bg:'#fee2e2'}},
+        'Seasonal': {{color:'#92400e',bg:'#fef3c7'}},
+        'Geographic': {{color:'#475569',bg:'#f1f5f9'}},
+        'Cross-category': {{color:'#7b1fa2',bg:'#f3e5f5'}}
+    }};
+    const tc = typeConfig[a.audience_type] || typeConfig['Geographic'];
+    const fmtSize = v => {{ if(v>=1e6) return (v/1e6).toFixed(1)+'M+'; if(v>=1e3) return Math.round(v/1e3)+'K+'; return v; }};
+
+    document.getElementById('modalType').textContent = a.audience_type;
+    document.getElementById('modalType').style.color = tc.color;
+    document.getElementById('modalName').textContent = a.audience_name;
+    document.getElementById('modalDesc').textContent = a.description || '';
+
+    document.getElementById('modalStats').innerHTML =
+        `<div class="modal-stat"><div class="n">${{fmtSize(a.audience_size)}}</div><div class="l">Audience size</div></div>` +
+        `<div class="modal-stat"><div class="n">${{a.avg_spend ? fmt(a.avg_spend) : 'N/A'}}</div><div class="l">Avg spend</div></div>` +
+        `<div class="modal-stat"><div class="n">${{a.avg_age ? Math.round(a.avg_age) : '—'}}</div><div class="l">Avg age</div></div>` +
+        `<div class="modal-stat"><div class="n">${{a.pct_female ? Math.round(a.pct_female)+'%' : '—'}}</div><div class="l">Female</div></div>` +
+        `<div class="modal-stat"><div class="n">${{a.avg_income ? fmt(a.avg_income) : '—'}}</div><div class="l">Avg income</div></div>`;
+
+    // Top categories
+    const cats = (D.aud_categories||[]).filter(c=>c.audience_id===audId).sort((a,b)=>b.spend-a.spend).slice(0,8);
+    const catMax = cats.length ? cats[0].spend : 1;
+    document.getElementById('modalCats').innerHTML = cats.length ?
+        cats.map(c => barRow(c.CATEGORY_TWO, c.spend, catMax, fmt(c.spend), tc.color)).join('') :
+        '<div style="color:#94a3b8;font-size:.82rem">No category data</div>';
+
+    // Top merchants
+    const merch = (D.aud_merchants||[]).filter(m=>m.audience_id===audId).sort((a,b)=>b.spend-a.spend).slice(0,8);
+    const mMax = merch.length ? merch[0].spend : 1;
+    document.getElementById('modalMerch').innerHTML = merch.length ?
+        merch.map(m => barRow(m.DESTINATION, m.spend, mMax, fmt(m.spend), '#1e3a5f')).join('') :
+        '<div style="color:#94a3b8;font-size:.82rem">No merchant data</div>';
+
+    // Age
+    const ages = (D.aud_age||[]).filter(x=>x.audience_id===audId);
+    const ageMax = ages.length ? Math.max(...ages.map(x=>x.customers)) : 1;
+    document.getElementById('modalAge').innerHTML = ages.length ?
+        ages.map(x => barRow(x.age_group, x.customers, ageMax, num(x.customers), '#2E75B6')).join('') :
+        '<div style="color:#94a3b8;font-size:.82rem">No age data</div>';
+
+    // Income
+    const inc = (D.aud_income||[]).filter(x=>x.audience_id===audId);
+    const incMax = inc.length ? Math.max(...inc.map(x=>x.customers)) : 1;
+    document.getElementById('modalIncome').innerHTML = inc.length ?
+        inc.map(x => barRow(x.income_group, x.customers, incMax, num(x.customers), '#4CAF50')).join('') :
+        '<div style="color:#94a3b8;font-size:.82rem">No income data</div>';
+
+    // Gender
+    const gen = (D.aud_gender||[]).filter(x=>x.audience_id===audId);
+    const genMax = gen.length ? Math.max(...gen.map(x=>x.customers)) : 1;
+    document.getElementById('modalGender').innerHTML = gen.length ?
+        gen.map(x => barRow(x.gender_label, x.customers, genMax, num(x.customers), x.gender_label==='Female'?'#E91E63':'#0f172a')).join('') :
+        '<div style="color:#94a3b8;font-size:.82rem">No gender data</div>';
+
+    // Province
+    const prov = (D.aud_province||[]).filter(x=>x.audience_id===audId).sort((a,b)=>b.spend-a.spend).slice(0,6);
+    const provMax = prov.length ? prov[0].spend : 1;
+    document.getElementById('modalProv').innerHTML = prov.length ?
+        prov.map(x => barRow(x.PROVINCE, x.spend, provMax, fmt(x.spend), '#64748b')).join('') :
+        '<div style="color:#94a3b8;font-size:.82rem">No province data</div>';
+
+    document.getElementById('audModal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}}
+
+function closeModal() {{
+    document.getElementById('audModal').classList.remove('show');
+    document.body.style.overflow = '';
+}}
+
+function barRow(label, value, max, display, color) {{
+    const pct = Math.round(value / max * 100);
+    return `<div class="modal-bar">
+        <div class="lbl">${{label}}</div>
+        <div class="track"><div class="fill" style="width:${{pct}}%;background:${{color}}"></div></div>
+        <div class="val">${{display}}</div>
+    </div>`;
+}}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {{ if(e.key==='Escape') closeModal(); }});
 
 // ─── INIT ───
 function init() {{
