@@ -257,6 +257,34 @@ body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
 .tog span{{padding:5px 14px;font-size:.78rem;cursor:pointer;color:#64748b}}
 .tog span.on{{background:#1e3a5f;color:#fff}}
 .pg{{display:none;padding:20px 24px;max-width:1300px;margin:0 auto}}.pg.a{{display:block}}
+.aud-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:12px}}
+.aud-card{{background:#fff;border-radius:12px;border:1px solid #f1f5f9;overflow:hidden;transition:box-shadow .2s,transform .15s}}
+.aud-card:hover{{box-shadow:0 4px 20px rgba(0,0,0,.08);transform:translateY(-2px)}}
+.aud-top{{height:8px}}
+.aud-body{{padding:16px 18px 14px}}
+.aud-type{{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}}
+.aud-name{{font-size:1rem;font-weight:600;color:#0f172a;margin-bottom:4px}}
+.aud-desc{{font-size:.78rem;color:#64748b;line-height:1.5;margin-bottom:12px;min-height:36px}}
+.aud-stats{{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap}}
+.aud-stat{{text-align:center}}
+.aud-stat .n{{font-size:1.1rem;font-weight:600;color:#0f172a}}
+.aud-stat .l{{font-size:.65rem;color:#94a3b8}}
+.aud-channels{{display:flex;gap:6px;align-items:center;margin-bottom:10px}}
+.aud-ch{{background:#f1f5f9;border-radius:4px;padding:3px 8px;font-size:.68rem;font-weight:600;color:#475569}}
+.aud-ch.meta{{background:#1877f2;color:#fff}}.aud-ch.goog{{background:#ea4335;color:#fff}}.aud-ch.tik{{background:#000;color:#fff}}
+.aud-tags{{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}}
+.aud-tag{{padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:500}}
+.aud-demog{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:10px 0;border-top:1px solid #f1f5f9;margin-top:8px}}
+.aud-demog .di{{text-align:center}}
+.aud-demog .di .dv{{font-size:.85rem;font-weight:600;color:#0f172a}}
+.aud-demog .di .dl{{font-size:.62rem;color:#94a3b8}}
+.aud-use{{background:#f8fafc;border-top:1px solid #f1f5f9;padding:10px 18px;font-size:.75rem;color:#64748b}}
+.aud-use strong{{color:#1e3a5f}}
+.aud-filters{{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}}
+.aud-filters label{{font-size:.78rem;color:#64748b;font-weight:500}}
+.aud-filters select{{padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit}}
+.aud-filters input{{padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit;width:180px}}
+.aud-count{{font-size:.82rem;color:#94a3b8;margin-left:auto}}
 .row{{display:grid;gap:12px;margin-bottom:14px}}
 .r2{{grid-template-columns:1fr 1fr}}.r3{{grid-template-columns:1fr 1fr 1fr}}.r4{{grid-template-columns:1fr 1fr 1fr 1fr}}.r5{{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:768px){{.r2,.r3,.r4,.r5{{grid-template-columns:1fr}}}}
@@ -378,16 +406,23 @@ tr:hover{{background:#f8fafc}}
 
 <!-- PAGE 5: AUDIENCES -->
 <div class="pg" id="pg5">
-<div class="row r3" id="audKpis"></div>
-<div class="sec"><h3>Audience catalog</h3>
-<div style="margin-bottom:10px">
-<label style="font-size:.78rem;color:#64748b">Type: </label>
-<select id="fAudType" onchange="renderAudiences()" style="padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:.8rem">
-<option value="">All</option>
-<option>Demographic</option><option>Lifestyle</option><option>Behavioral</option><option>Seasonal</option><option>Geographic</option><option>Cross-category</option>
+<div style="margin-bottom:4px"><h2 style="font-size:1.3rem;font-weight:700;color:#0f172a;margin:0">Audience Marketplace</h2><p style="font-size:.82rem;color:#64748b;margin:4px 0 16px">Pre-packaged audiences ready for activation via LiveRamp → Meta, Google, TikTok</p></div>
+<div class="row r4" id="audKpis"></div>
+<div class="aud-filters">
+<label>Type</label>
+<select id="fAudType" onchange="renderAudiences()">
+<option value="">All types</option>
+<option value="Demographic">Demographic</option><option value="Lifestyle">Lifestyle</option><option value="Behavioral">Behavioral</option><option value="Seasonal">Seasonal</option><option value="Geographic">Geographic</option><option value="Cross-category">Cross-category</option>
 </select>
+<label>Min size</label>
+<select id="fAudMin" onchange="renderAudiences()">
+<option value="0">Any</option><option value="100000">100k+</option><option value="500000">500k+</option><option value="1000000">1M+</option>
+</select>
+<label>Search</label>
+<input id="fAudSearch" type="text" placeholder="Search audiences..." oninput="renderAudiences()">
+<span class="aud-count" id="audCount"></span>
 </div>
-<div id="audTable"></div></div>
+<div class="aud-grid" id="audGrid"></div>
 </div>
 
 <div class="ftr">NAV Analytics Dashboard · {PROJECT} · Built by Prosper Sikhwari · {datetime.now().strftime('%B %Y')}</div>
@@ -715,30 +750,85 @@ function renderCategories() {{
     }}
 }}
 
-// ─── RENDER: Audiences ───
+// ─── RENDER: Audiences (Marketplace) ───
 function renderAudiences() {{
     const typeFilter = document.getElementById('fAudType')?.value || '';
+    const minSize = parseInt(document.getElementById('fAudMin')?.value || '0');
+    const search = (document.getElementById('fAudSearch')?.value || '').toLowerCase();
     let auds = D.audiences || [];
     if(typeFilter) auds = auds.filter(a=>a.audience_type===typeFilter);
+    if(minSize) auds = auds.filter(a=>a.audience_size>=minSize);
+    if(search) auds = auds.filter(a=>(a.audience_name||'').toLowerCase().includes(search)||(a.description||'').toLowerCase().includes(search));
 
+    const total = auds.reduce((s,a)=>s+a.audience_size,0);
     document.getElementById('audKpis').innerHTML =
-        card('Total audiences', auds.length) +
-        card('Total reachable', num(auds.reduce((s,a)=>s+a.audience_size,0))) +
-        card('Avg size', num(Math.round(auds.reduce((s,a)=>s+a.audience_size,0)/(auds.length||1))));
+        card('Available audiences', auds.length) +
+        card('Total reachable', num(total)) +
+        card('Avg audience size', num(Math.round(total/(auds.length||1)))) +
+        card('Activation channels', 'Meta · Google · TikTok');
 
-    const typeColors = {{'Demographic':'b','Lifestyle':'g','Behavioral':'r','Seasonal':'y','Geographic':'gr','Cross-category':'p'}};
-    document.getElementById('audTable').innerHTML = tableHtml(
-        ['Audience','Type','Size','Avg Spend','Avg Age','% Female','Province','Description'],
-        auds.map(a=>[
-            `<strong>${{a.audience_name}}</strong>`,
-            badge(a.audience_type, typeColors[a.audience_type]||'gr'),
-            num(a.audience_size), fmt(a.avg_spend),
-            a.avg_age ? Math.round(a.avg_age) : '',
-            a.pct_female ? pct(a.pct_female) : '',
-            a.top_province || '',
-            `<span style="font-size:.75rem;color:#64748b">${{a.description||''}}</span>`
-        ])
-    );
+    document.getElementById('audCount').textContent = `Showing ${{auds.length}} audience${{auds.length!==1?'s':''}}`;
+
+    const typeConfig = {{
+        'Demographic': {{color:'#1e40af',bg:'#dbeafe',top:'#2563eb',icon:'👤',usePre:'Target by'}},
+        'Lifestyle': {{color:'#166534',bg:'#dcfce7',top:'#22c55e',icon:'✨',usePre:'Reach'}},
+        'Behavioral': {{color:'#991b1b',bg:'#fee2e2',top:'#ef4444',icon:'📊',usePre:'Re-engage'}},
+        'Seasonal': {{color:'#92400e',bg:'#fef3c7',top:'#f59e0b',icon:'📅',usePre:'Activate during'}},
+        'Geographic': {{color:'#475569',bg:'#f1f5f9',top:'#64748b',icon:'📍',usePre:'Reach in'}},
+        'Cross-category': {{color:'#7b1fa2',bg:'#f3e5f5',top:'#9c27b0',icon:'🔗',usePre:'Cross-sell to'}}
+    }};
+
+    const useCases = {{
+        'Demographic': ['Awareness campaigns','Broad reach targeting','Demographic layering','Persona-based campaigns'],
+        'Lifestyle': ['Interest-based targeting','Content marketing','Brand alignment','Affinity campaigns'],
+        'Behavioral': ['Retargeting at-risk','Win-back campaigns','Upsell & cross-sell','Loyalty programs'],
+        'Seasonal': ['Event-driven campaigns','Flash sales','Holiday promotions','Calendar targeting'],
+        'Geographic': ['Local store campaigns','Regional launches','Geo-targeted promos','Expansion targeting'],
+        'Cross-category': ['Bundle promotions','Cross-brand campaigns','Lifestyle packages','Multi-category upsell']
+    }};
+
+    const fmtSize = v => {{ if(v>=1e6) return (v/1e6).toFixed(1)+'M'; if(v>=1e3) return Math.round(v/1e3)+'K'; return v; }};
+
+    let html = '';
+    auds.forEach((a,i) => {{
+        const tc = typeConfig[a.audience_type] || typeConfig['Geographic'];
+        const uses = useCases[a.audience_type] || [];
+        const useCase = uses[i % uses.length] || '';
+
+        html += `
+        <div class="aud-card">
+            <div class="aud-top" style="background:${{tc.top}}"></div>
+            <div class="aud-body">
+                <div class="aud-type" style="color:${{tc.color}}">${{tc.icon}} ${{a.audience_type}}</div>
+                <div class="aud-name">${{a.audience_name}}</div>
+                <div class="aud-desc">${{a.description || 'Behaviorally defined audience segment.'}}</div>
+                <div class="aud-stats">
+                    <div class="aud-stat"><div class="n">${{fmtSize(a.audience_size)}}</div><div class="l">Reach</div></div>
+                    <div class="aud-stat"><div class="n">${{a.avg_spend ? fmt(a.avg_spend) : 'N/A'}}</div><div class="l">Avg Spend</div></div>
+                    ${{a.avg_age ? `<div class="aud-stat"><div class="n">${{Math.round(a.avg_age)}}</div><div class="l">Avg Age</div></div>` : ''}}
+                    ${{a.pct_female ? `<div class="aud-stat"><div class="n">${{Math.round(a.pct_female)}}%</div><div class="l">Female</div></div>` : ''}}
+                </div>
+                <div class="aud-channels">
+                    <span class="aud-ch meta">Meta</span>
+                    <span class="aud-ch goog">Google</span>
+                    <span class="aud-ch tik">TikTok</span>
+                </div>
+                <div class="aud-tags">
+                    <span class="aud-tag" style="background:${{tc.bg}};color:${{tc.color}}">${{a.audience_type}}</span>
+                    ${{a.top_province ? `<span class="aud-tag" style="background:#f1f5f9;color:#475569">${{a.top_province}}</span>` : ''}}
+                    ${{a.top_segment ? `<span class="aud-tag" style="background:#f1f5f9;color:#475569">${{a.top_segment}}</span>` : ''}}
+                </div>
+                <div class="aud-demog">
+                    <div class="di"><div class="dv">${{a.top_age_group||'—'}}</div><div class="dl">Top Age</div></div>
+                    <div class="di"><div class="dv">${{a.top_income_group||'—'}}</div><div class="dl">Top Income</div></div>
+                    <div class="di"><div class="dv">${{a.top_province||'—'}}</div><div class="dl">Top Province</div></div>
+                </div>
+            </div>
+            <div class="aud-use"><strong>Best for:</strong> ${{useCase}}</div>
+        </div>`;
+    }});
+
+    document.getElementById('audGrid').innerHTML = html || '<div class="empty">No audiences match your filters</div>';
 }}
 
 // ─── INIT ───
