@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 generate_dashboard.py
-═══════════════════════════════════════════════════════════════
+---
 Generates a fully interactive HTML dashboard with:
   - 6 tabbed pages (Overview, Client Pitch, Segments, Churn & CLV, Categories, Audiences)
   - Category + Client dropdowns that filter all charts live
@@ -40,9 +40,9 @@ def to_json(df):
     if df is None: return '[]'
     return df.to_json(orient='records', date_format='iso')
 
-# ═══════════════════════════════════════════════════════════════
+# ---
 # PULL ALL DATA
-# ═══════════════════════════════════════════════════════════════
+# ---
 print(f'Pulling data from {PROJECT}...')
 
 print('  overview')
@@ -264,9 +264,9 @@ timepatterns = safe(f"""
     FROM `{PROJECT}.marts.mart_store_time_patterns` WHERE total_transactions >= 1000
 """)
 
-# ═══════════════════════════════════════════════════════════════
+# ---
 # SERIALIZE
-# ═══════════════════════════════════════════════════════════════
+# ---
 print('\nSerializing...')
 ov = dict(zip(overview['k'], overview['v'])) if overview is not None else {}
 
@@ -306,9 +306,9 @@ print(f'  Data size: {size_mb:.1f} MB')
 now = datetime.now().strftime('%d %B %Y')
 cats = sorted(benchmarks['CATEGORY_TWO'].unique().tolist()) if benchmarks is not None else []
 
-# ═══════════════════════════════════════════════════════════════
+# ---
 # HTML
-# ═══════════════════════════════════════════════════════════════
+# ---
 print('Building dashboard...')
 
 html = f"""<!DOCTYPE html>

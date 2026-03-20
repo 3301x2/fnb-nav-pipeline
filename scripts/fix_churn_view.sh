@@ -1,9 +1,18 @@
 #!/bin/bash
-# fix_churn_view.sh — run this on the work machine, then re-run step 6
-# Usage: bash fix_churn_view.sh
+# fix_churn_view.sh - recreates the churn dashboard view
+# usage: bash scripts/fix_churn_view.sh [sandbox|production]
 
-bq query --use_legacy_sql=false "
-CREATE OR REPLACE VIEW \`fmn-sandbox.marts.v_dashboard_churn\` AS
+ENV="${1:-sandbox}"
+case "${ENV}" in
+    sandbox|dev)     PROJECT="fmn-sandbox" ;;
+    production|prod) PROJECT="fmn-production" ;;
+    *) echo "Usage: bash scripts/fix_churn_view.sh [sandbox|production]"; exit 1 ;;
+esac
+
+echo "Fixing churn view on ${PROJECT}..."
+
+bq query --use_legacy_sql=false --project_id="${PROJECT}" "
+CREATE OR REPLACE VIEW \`${PROJECT}.marts.v_dashboard_churn\` AS
 SELECT
     cr.UNIQUE_ID,
     cr.churn_risk_level,
@@ -24,13 +33,12 @@ SELECT
     c.age_group,
     c.gender_label,
     c.income_group
-FROM \`fmn-sandbox.marts.mart_churn_risk\` cr
-LEFT JOIN \`fmn-sandbox.marts.mart_cluster_output\` co ON cr.UNIQUE_ID = co.UNIQUE_ID
-LEFT JOIN \`fmn-sandbox.marts.mart_churn_explained\` ce ON cr.UNIQUE_ID = ce.UNIQUE_ID
-LEFT JOIN \`fmn-sandbox.marts.mart_customer_clv\` clv ON cr.UNIQUE_ID = clv.UNIQUE_ID
-LEFT JOIN \`fmn-sandbox.marts.mart_spend_momentum\` sm ON cr.UNIQUE_ID = sm.UNIQUE_ID
-LEFT JOIN \`fmn-sandbox.staging.stg_customers\` c ON cr.UNIQUE_ID = c.UNIQUE_ID
+FROM \`${PROJECT}.marts.mart_churn_risk\` cr
+LEFT JOIN \`${PROJECT}.marts.mart_cluster_output\` co ON cr.UNIQUE_ID = co.UNIQUE_ID
+LEFT JOIN \`${PROJECT}.marts.mart_churn_explained\` ce ON cr.UNIQUE_ID = ce.UNIQUE_ID
+LEFT JOIN \`${PROJECT}.marts.mart_customer_clv\` clv ON cr.UNIQUE_ID = clv.UNIQUE_ID
+LEFT JOIN \`${PROJECT}.marts.mart_spend_momentum\` sm ON cr.UNIQUE_ID = sm.UNIQUE_ID
+LEFT JOIN \`${PROJECT}.staging.stg_customers\` c ON cr.UNIQUE_ID = c.UNIQUE_ID
 "
 
-echo ""
-echo "Done. Now run: bash scripts/run.sh sandbox 6"
+echo "Done. Now run: bash scripts/run.sh ${ENV} 6"
