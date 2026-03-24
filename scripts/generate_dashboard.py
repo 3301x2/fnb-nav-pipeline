@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 generate_dashboard.py
----
+═══════════════════════════════════════════════════════════════
 Generates a fully interactive HTML dashboard with:
   - 6 tabbed pages (Overview, Client Pitch, Segments, Churn & CLV, Categories, Audiences)
   - Category + Client dropdowns that filter all charts live
@@ -16,14 +16,57 @@ Usage:
 Output: nav_dashboard.html
 """
 
-import os, json, sys
+import os, json, sys, base64
 from datetime import datetime
+from pathlib import Path
 from google.cloud import bigquery
 import pandas as pd
 
 PROJECT = os.environ.get('BQ_PROJECT', 'fmn-sandbox')
 bq = bigquery.Client(project=PROJECT, location='africa-south1')
 OUT = 'nav_dashboard.html'
+
+# ── Load brand config ──
+SCRIPT_DIR = Path(__file__).parent
+BRAND_FILE = SCRIPT_DIR.parent / 'assets' / 'brand.json'
+LOGO_FILE = SCRIPT_DIR.parent / 'assets' / 'logo.png'
+
+brand = {
+    'brand_name': 'NAV Analytics',
+    'tagline': 'Data & Media Network',
+    'colors': {
+        'header_bg': '#0f172a',
+        'header_bg_gradient': '#1e3a5f',
+        'accent': '#1e3a5f',
+        'chart_primary': '#0f172a',
+        'chart_secondary': '#2E75B6',
+        'chart_palette': ['#0f172a','#1e3a5f','#2E75B6','#4CAF50','#FF9800','#f44336','#9C27B0','#00BCD4'],
+        'tab_active': '#1e3a5f',
+        'badge_highlight': '#1e3a5f'
+    },
+    'confidential': True
+}
+
+if BRAND_FILE.exists():
+    with open(BRAND_FILE) as f:
+        user_brand = json.load(f)
+        brand.update(user_brand)
+        if 'colors' in user_brand:
+            brand['colors'] = {**brand['colors'], **user_brand['colors']}
+    print(f'  Brand: {brand["brand_name"]} (loaded from {BRAND_FILE})')
+else:
+    print(f'  Brand: default (no assets/brand.json found)')
+
+# Embed logo as base64
+logo_b64 = ''
+if LOGO_FILE.exists():
+    with open(LOGO_FILE, 'rb') as f:
+        logo_b64 = base64.b64encode(f.read()).decode()
+    print(f'  Logo: {LOGO_FILE.name} ({len(logo_b64)//1024}KB base64)')
+else:
+    print(f'  Logo: none (put logo.png in assets/ folder)')
+
+BC = brand['colors']
 
 def q(sql):
     return bq.query(sql).to_dataframe()
@@ -40,10 +83,23 @@ def to_json(df):
     if df is None: return '[]'
     return df.to_json(orient='records', date_format='iso')
 
-# ---
+# ═══════════════════════════════════════════════════════════════
 # PULL ALL DATA
-# ---
+# ═══════════════════════════════════════════════════════════════
 print(f'Pulling data from {PROJECT}...')
+
+print('  date range')
+date_range = safe(f"""
+    SELECT MIN(EFF_DATE) AS data_from, MAX(EFF_DATE) AS data_to,
+        DATE_DIFF(MAX(EFF_DATE), MIN(EFF_DATE), DAY) AS days_span,
+        FORMAT_DATE('%d %b %Y', MIN(EFF_DATE)) AS from_str,
+        FORMAT_DATE('%d %b %Y', MAX(EFF_DATE)) AS to_str,
+        FORMAT_DATE('%d %b %Y', DATE_SUB(MAX(EFF_DATE), INTERVAL 12 MONTH)) AS analysis_from_str
+    FROM `{PROJECT}.staging.stg_transactions`
+    WHERE EFF_DATE >= DATE_SUB(
+        (SELECT MAX(EFF_DATE) FROM `{PROJECT}.staging.stg_transactions`),
+        INTERVAL 12 MONTH)
+""")
 
 print('  overview')
 overview = safe(f"""
@@ -264,14 +320,16 @@ timepatterns = safe(f"""
     FROM `{PROJECT}.marts.mart_store_time_patterns` WHERE total_transactions >= 1000
 """)
 
-# ---
+# ═══════════════════════════════════════════════════════════════
 # SERIALIZE
-# ---
+# ═══════════════════════════════════════════════════════════════
 print('\nSerializing...')
 ov = dict(zip(overview['k'], overview['v'])) if overview is not None else {}
 
 data_json = json.dumps({
     'overview': ov,
+    'date_range': json.loads(to_json(date_range)),
+    'brand': brand,
     'benchmarks': json.loads(to_json(benchmarks)),
     'profiles': json.loads(to_json(profiles)),
     'summary': json.loads(to_json(summary)),
@@ -306,9 +364,9 @@ print(f'  Data size: {size_mb:.1f} MB')
 now = datetime.now().strftime('%d %B %Y')
 cats = sorted(benchmarks['CATEGORY_TWO'].unique().tolist()) if benchmarks is not None else []
 
-# ---
+# ═══════════════════════════════════════════════════════════════
 # HTML
-# ---
+# ═══════════════════════════════════════════════════════════════
 print('Building dashboard...')
 
 html = f"""<!DOCTYPE html>
@@ -319,19 +377,20 @@ html = f"""<!DOCTYPE html>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
-#hdr{{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
+#hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
 #hdr h1{{font-size:1.3rem;font-weight:600}}
-#hdr .meta{{font-size:.75rem;opacity:.5;margin-left:auto}}
+#hdr .meta{{font-size:.75rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.6}}
+#hdr .logo{{height:36px;margin-right:4px}}
 .tabs{{display:flex;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 16px;overflow-x:auto}}
 .tab{{padding:10px 18px;font-size:.85rem;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}}
 .tab:hover{{color:#1e3a5f;background:#f8fafc}}
-.tab.a{{color:#1e3a5f;border-bottom-color:#1e3a5f}}
+.tab.a{{color:{BC['tab_active']};border-bottom-color:{BC['tab_active']}}}
 .filters{{background:#fff;padding:10px 24px;border-bottom:1px solid #e2e8f0;display:flex;gap:12px;flex-wrap:wrap;align-items:center}}
 .filters label{{font-size:.78rem;color:#64748b;font-weight:500}}
 .filters select{{padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;font-family:inherit;min-width:160px}}
 .tog{{display:inline-flex;border:1px solid #d1d5db;border-radius:6px;overflow:hidden}}
 .tog span{{padding:5px 14px;font-size:.78rem;cursor:pointer;color:#64748b}}
-.tog span.on{{background:#1e3a5f;color:#fff}}
+.tog span.on{{background:{BC['accent']};color:#fff}}
 .pg{{display:none;padding:20px 24px;max-width:1300px;margin:0 auto}}.pg.a{{display:block}}
 .aud-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:12px}}
 .aud-card{{background:#fff;border-radius:12px;border:1px solid #f1f5f9;overflow:hidden;transition:box-shadow .2s,transform .15s}}
@@ -415,8 +474,9 @@ tr:hover{{background:#f8fafc}}
 </head><body>
 
 <div id="hdr">
-<h1>NAV Analytics Dashboard</h1>
-<span class="meta">{PROJECT} · {now} · Confidential</span>
+{'<img class="logo" src="data:image/png;base64,' + logo_b64 + '" alt="logo">' if logo_b64 else ''}
+<h1>{brand['brand_name']} {'· ' + brand.get('tagline','') if brand.get('tagline') else ''}</h1>
+<span class="meta">{PROJECT} · Generated {now}<br>{'Confidential · ' if brand.get('confidential') else ''}Data period shown on Overview</span>
 </div>
 
 <div class="tabs" id="tabbar">
@@ -447,6 +507,7 @@ tr:hover{{background:#f8fafc}}
 
 <!-- PAGE 0: OVERVIEW -->
 <div class="pg a" id="pg0">
+<div id="dateRange" style="background:#fff;border-radius:10px;padding:12px 18px;margin-bottom:14px;border:1px solid #f1f5f9;display:flex;gap:24px;align-items:center;flex-wrap:wrap"></div>
 <div class="row r5" id="ovKpis"></div>
 <div class="row r2">
 <div class="sec"><h3>Customers by segment</h3><div class="chbox"><canvas id="chSegPie"></canvas></div></div>
@@ -458,7 +519,9 @@ tr:hover{{background:#f8fafc}}
 
 <!-- PAGE 1: CLIENT PITCH -->
 <div class="pg" id="pg1">
+<div id="cpDate" style="font-size:.78rem;color:#94a3b8;margin-bottom:10px"></div>
 <div class="row r4" id="cpKpis"></div>
+<div class="row r4" id="cpKpis2"></div>
 <div class="row r2">
 <div class="sec"><h3>Market share — competitors</h3><div class="chbox"><canvas id="chCompShare"></canvas></div></div>
 <div class="sec"><h3>Spend per customer — competitors</h3><div class="chbox"><canvas id="chCompSpc"></canvas></div></div>
@@ -562,11 +625,11 @@ tr:hover{{background:#f8fafc}}
 </div>
 </div>
 
-<div class="ftr">NAV Analytics Dashboard · {PROJECT} · Built by Prosper Sikhwari · {datetime.now().strftime('%B %Y')}</div>
+<div class="ftr">{brand['brand_name']} · {PROJECT} · Built by Prosper Sikhwari · {datetime.now().strftime('%B %Y')}</div>
 
 <script>
 const D = DASHBOARD_DATA_PLACEHOLDER;
-const C = ['#0f172a','#1e3a5f','#2E75B6','#4CAF50','#FF9800','#f44336','#9C27B0','#00BCD4','#607D8B','#795548'];
+const C = D.brand && D.brand.colors && D.brand.colors.chart_palette ? D.brand.colors.chart_palette : ['#0f172a','#1e3a5f','#2E75B6','#4CAF50','#FF9800','#f44336','#9C27B0','#00BCD4','#607D8B','#795548'];
 const RC = ['#f44336','#FF9800','#fbc02d','#4CAF50','#2196f3'];
 Chart.defaults.font.family = "'DM Sans',sans-serif";
 Chart.defaults.plugins.legend.labels.usePointStyle = true;
@@ -645,6 +708,18 @@ function destName(dest, client, rank) {{
 
 // ─── RENDER: Overview ───
 function renderOverview() {{
+    // Date range bar
+    const dr = (D.date_range && D.date_range.length) ? D.date_range[0] : null;
+    if(dr) {{
+        document.getElementById('dateRange').innerHTML =
+            `<div style="font-size:.82rem"><strong style="color:#0f172a">Analysis period</strong></div>` +
+            `<div style="font-size:.82rem;color:#64748b"><strong>${{dr.analysis_from_str || '—'}}</strong> → <strong>${{dr.to_str || '—'}}</strong> (12 months)</div>` +
+            `<div style="font-size:.82rem;color:#64748b">Full data: ${{dr.from_str || '—'}} → ${{dr.to_str || '—'}} (${{dr.days_span ? Math.round(dr.days_span/365*10)/10 : '?'}} years)</div>` +
+            `<div style="margin-left:auto;font-size:.72rem;color:#94a3b8">Dashboard refreshed: ${{new Date().toLocaleDateString('en-ZA')}}</div>`;
+    }} else {{
+        document.getElementById('dateRange').innerHTML = '<div style="font-size:.82rem;color:#94a3b8">Date range: loading...</div>';
+    }}
+
     const ov = D.overview;
     document.getElementById('ovKpis').innerHTML =
         card('Transactions', num(ov.txns)) +
@@ -698,25 +773,36 @@ function renderPitch() {{
     // Client data (from full list)
     const ck = allComps.find(c=>c.DESTINATION===client);
 
-    // KPIs — 8 cards
+    // Date context
+    const dr = (D.date_range && D.date_range.length) ? D.date_range[0] : null;
+    document.getElementById('cpDate').innerHTML = dr ?
+        `📊 Data: <strong>${{dr.analysis_from_str}}</strong> → <strong>${{dr.to_str}}</strong> (12 months) · Last refreshed: ${{new Date().toLocaleDateString('en-ZA')}}` :
+        '';
+
+    // KPIs — 2 rows of 4
     if(ck) {{
         document.getElementById('cpKpis').innerHTML =
             card('Customers', num(ck.customers)) +
             card('Total Spend', fmt(ck.total_spend)) +
             card('Market Share', pct(ck.market_share_pct)) +
-            card('Penetration', pct(ck.penetration_pct)) +
+            card('Penetration', pct(ck.penetration_pct));
+        document.getElementById('cpKpis2').innerHTML =
             card('Avg Transaction', fmt(ck.avg_txn_value)) +
             card('Spend/Customer', fmt(ck.spend_per_customer)) +
             card('Rank in Category', '#'+ck.spend_rank) +
             card('Share of Wallet', pct(ck.avg_share_of_wallet));
     }} else {{
         document.getElementById('cpKpis').innerHTML = '<div class="empty">Select a client from the dropdown above</div>';
+        document.getElementById('cpKpis2').innerHTML = '';
         return;
     }}
 
+    // Brand accent color for charts
+    const accent = (D.brand && D.brand.colors && D.brand.colors.chart_primary) || '#0f172a';
+
     // Competitor charts
     const labels = comps.map((c,i) => destName(c.DESTINATION, client, i+1));
-    const colors = comps.map(c => c.DESTINATION===client ? '#d97706' : '#0f172a');
+    const colors = comps.map(c => c.DESTINATION===client ? '#d97706' : accent);
 
     makeChart('chCompShare', {{type:'bar',data:{{labels,datasets:[{{data:comps.map(c=>c.market_share_pct),backgroundColor:colors,borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{{legend:{{display:false}}}}}}}});
     makeChart('chCompSpc', {{type:'bar',data:{{labels,datasets:[{{data:comps.map(c=>c.spend_per_customer),backgroundColor:colors,borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{{legend:{{display:false}}}},scales:{{x:{{ticks:{{callback:v=>fmt(v)}}}}}}}}}});

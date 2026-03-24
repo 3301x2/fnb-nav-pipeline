@@ -1,0 +1,16 @@
+{
+    "brand_name": "First Advertising",
+    "logo_path": "assets/logo.png",
+    "colors": {
+        "header_bg": "#E85C0D",
+        "header_bg_gradient": "#C74B00",
+        "accent": "#E85C0D",
+        "chart_primary": "#E85C0D",
+        "chart_secondary": "#1e3a5f",
+        "chart_palette": ["#E85C0D", "#C74B00", "#1e3a5f", "#2E75B6", "#4CAF50", "#FF9800", "#9C27B0", "#00BCD4"],
+        "tab_active": "#E85C0D",
+        "badge_highlight": "#E85C0D"
+    },
+    "tagline": "Data & Media Network",
+    "confidential": true
+}
