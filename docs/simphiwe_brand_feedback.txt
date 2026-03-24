@@ -1,0 +1,27 @@
+Good thinking bro, you're on the right track. Few things though:
+
+The categories you picked as proxies — health food, fruit & veg, supplements, fast food — those are more grocery shoppers than beauty buyers. If we're building an audience for Revlon or Eucerin, we need people who actually shop in beauty/pharmacy, not people buying bananas.
+
+Better proxies would be:
+- Clicks, Dis-Chem, Sorbet, Edgars Beauty shoppers (the actual stores that sell these products)
+- In categories like Pharmacy, Health & Beauty, Personal Care
+- And specifically people who spend a lot there, not just once-off. So filter for share of wallet > 50% at those stores
+
+The other thing is you're trying to build one audience but actually each brand needs a different cut:
+- Revlon = mass market makeup, so mid-income women, younger
+- Eucerin / La Roche-Posay = premium dermocosmetics, higher income, wider age range
+- Vital = vitamins/supplements, health-conscious, wider demographic
+- Cantu = ethnic hair care, so different demographic entirely
+
+So the approach is:
+1. Start with the base — everyone who shops at Clicks/Dis-Chem in pharmacy/beauty
+2. Profile them — age, income, gender, province, what else they buy
+3. Then slice differently per brand based on the price point and product type
+
+Your point about affluence bias is valid — don't hardcode income as a filter for all of them. Use it as a differentiator between brands. Revlon buyer is different from La Roche-Posay buyer.
+
+We already have the data for this in int_customer_category_spend and stg_customers. Check what CATEGORY_TWO values exist that relate to health/beauty/pharmacy:
+
+SELECT DISTINCT CATEGORY_TWO FROM `fmn-sandbox.analytics.int_customer_category_spend` WHERE UPPER(CATEGORY_TWO) LIKE '%HEALTH%' OR UPPER(CATEGORY_TWO) LIKE '%PHARM%' OR UPPER(CATEGORY_TWO) LIKE '%BEAUTY%' OR UPPER(CATEGORY_TWO) LIKE '%CARE%'
+
+Start there and we can build the audiences together.
