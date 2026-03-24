@@ -47,23 +47,19 @@ case "${ENV}" in
     production|prod|prd)
         PROJECT_ID="fmn-production"
         ;;
-    local|adg)
-        PROJECT_ID="adg-internal-tech-sandbox"
-        ;;
     *)
         # If first arg looks like a step number, assume sandbox
-        if [[ "${ENV}" =~ ^[0-6]$|^all$ ]]; then
+        if [[ "${ENV}" =~ ^[0-5]$|^all$ ]]; then
             STEP="${ENV}"
             PROJECT_ID="fmn-sandbox"
             ENV="sandbox"
         else
             echo "Unknown environment: ${ENV}"
-            echo "Usage: bash scripts/run.sh [sandbox|production|local] [0-6|all]"
+            echo "Usage: bash scripts/run.sh [sandbox|production] [0-5|all]"
             echo ""
             echo "Examples:"
             echo "  bash scripts/run.sh sandbox       → full pipeline on fmn-sandbox"
             echo "  bash scripts/run.sh production 3   → step 3 on fmn-production"
-            echo "  bash scripts/run.sh local          → full pipeline on adg-internal-tech-sandbox"
             echo "  bash scripts/run.sh sandbox 1      → step 1 on fmn-sandbox"
             echo "  bash scripts/run.sh 3              → step 3 on fmn-sandbox (default)"
             exit 1
@@ -315,27 +311,6 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
 
     run_sql "${SQL_DIR}/04_marts/mart_store_time_patterns.sql" \
         "mart_store_time_patterns (time-of-day, day-of-week by store)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_cohort_retention.sql" \
-        "mart_cohort_retention (customer retention by signup cohort)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_category_affinity.sql" \
-        "mart_category_affinity (cross-category shopping patterns)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_category_scorecard.sql" \
-        "mart_category_scorecard (portfolio health overview)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_pitch_opportunities.sql" \
-        "mart_pitch_opportunities (ranked client pitch targets)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_churn_explained.sql" \
-        "mart_churn_explained (why each customer is at risk)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_spend_momentum.sql" \
-        "mart_spend_momentum (spend acceleration/deceleration per customer)"
-
-    run_sql "${SQL_DIR}/04_marts/mart_category_propensity.sql" \
-        "mart_category_propensity (next category adoption predictions)"
 
     run_sql "${SQL_DIR}/04_marts/mart_audience_catalog.sql" \
         "mart_audience_members + mart_audience_catalog (pre-packaged audiences)"
