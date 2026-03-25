@@ -19,12 +19,16 @@ Output: nav_dashboard.html
 import os, json, sys, base64
 from datetime import datetime
 from pathlib import Path
-from google.cloud import bigquery
-import pandas as pd
 
+CACHED = '--cached' in sys.argv or '--cache' in sys.argv
 PROJECT = os.environ.get('BQ_PROJECT', 'fmn-sandbox')
-bq = bigquery.Client(project=PROJECT, location='africa-south1')
 OUT = 'nav_dashboard.html'
+CACHE_FILE = 'nav_dashboard_cache.json'
+
+if not CACHED:
+    from google.cloud import bigquery
+    import pandas as pd
+    bq = bigquery.Client(project=PROJECT, location='africa-south1')
 
 # ── Load brand config ──
 SCRIPT_DIR = Path(__file__).parent
@@ -132,9 +136,24 @@ def to_json(df):
     return df.to_json(orient='records', date_format='iso')
 
 # ═══════════════════════════════════════════════════════════════
-# PULL ALL DATA
+# PULL ALL DATA (or load from cache)
 # ═══════════════════════════════════════════════════════════════
-print(f'Pulling data from {PROJECT}...')
+if CACHED and os.path.exists(CACHE_FILE):
+    print(f'Loading from cache: {CACHE_FILE} (no BQ queries, no cost)')
+    with open(CACHE_FILE) as f:
+        data_json = f.read()
+    cats = sorted(set(b['CATEGORY_TWO'] for b in json.loads(data_json).get('benchmarks', [])))
+    print(f'  {len(data_json)//1024}KB, {len(cats)} categories')
+    # Override safe so query lines below are harmless no-ops
+    def safe(sql): return None
+    def q(sql): return None
+elif CACHED:
+    print(f'ERROR: no cache file found. Run once without --cached first.')
+    sys.exit(1)
+else:
+    data_json = None
+
+print(f'Pulling data from {PROJECT}...' if not CACHED else '  Skipping queries (cached)')
 
 print('  date range')
 date_range = safe(f"""
@@ -371,46 +390,53 @@ timepatterns = safe(f"""
 # ═══════════════════════════════════════════════════════════════
 # SERIALIZE
 # ═══════════════════════════════════════════════════════════════
-print('\nSerializing...')
-ov = dict(zip(overview['k'], overview['v'])) if overview is not None else {}
+if data_json is None:
+    print('\nSerializing...')
+    ov = dict(zip(overview['k'], overview['v'])) if overview is not None else {}
 
-data_json = json.dumps({
-    'overview': ov,
-    'date_range': json.loads(to_json(date_range)),
-    'brand': brand,
-    'benchmarks': json.loads(to_json(benchmarks)),
-    'profiles': json.loads(to_json(profiles)),
-    'summary': json.loads(to_json(summary)),
-    'revenue': json.loads(to_json(revenue)),
-    'churn': json.loads(to_json(churn)),
-    'churn_reasons': json.loads(to_json(churn_reasons)),
-    'clv': json.loads(to_json(clv)),
-    'momentum': json.loads(to_json(momentum)),
-    'retention': json.loads(to_json(retention)),
-    'behavioral': json.loads(to_json(behavioral)),
-    'categories': json.loads(to_json(categories)),
-    'pitches': json.loads(to_json(pitches)),
-    'affinity': json.loads(to_json(affinity)),
-    'propensity': json.loads(to_json(propensity)),
-    'audiences': json.loads(to_json(audiences)),
-    'aud_categories': json.loads(to_json(aud_categories)),
-    'aud_merchants': json.loads(to_json(aud_merchants)),
-    'aud_age': json.loads(to_json(aud_age)),
-    'aud_income': json.loads(to_json(aud_income)),
-    'aud_gender': json.loads(to_json(aud_gender)),
-    'aud_province': json.loads(to_json(aud_province)),
-    'demo': json.loads(to_json(demo)),
-    'geo': json.loads(to_json(geo)),
-    'trends': json.loads(to_json(trends)),
-    'loyalty': json.loads(to_json(loyalty)),
-    'timepatterns': json.loads(to_json(timepatterns)),
-}, default=str)
+    data_json = json.dumps({
+        'overview': ov,
+        'date_range': json.loads(to_json(date_range)),
+        'brand': brand,
+        'benchmarks': json.loads(to_json(benchmarks)),
+        'profiles': json.loads(to_json(profiles)),
+        'summary': json.loads(to_json(summary)),
+        'revenue': json.loads(to_json(revenue)),
+        'churn': json.loads(to_json(churn)),
+        'churn_reasons': json.loads(to_json(churn_reasons)),
+        'clv': json.loads(to_json(clv)),
+        'momentum': json.loads(to_json(momentum)),
+        'retention': json.loads(to_json(retention)),
+        'behavioral': json.loads(to_json(behavioral)),
+        'categories': json.loads(to_json(categories)),
+        'pitches': json.loads(to_json(pitches)),
+        'affinity': json.loads(to_json(affinity)),
+        'propensity': json.loads(to_json(propensity)),
+        'audiences': json.loads(to_json(audiences)),
+        'aud_categories': json.loads(to_json(aud_categories)),
+        'aud_merchants': json.loads(to_json(aud_merchants)),
+        'aud_age': json.loads(to_json(aud_age)),
+        'aud_income': json.loads(to_json(aud_income)),
+        'aud_gender': json.loads(to_json(aud_gender)),
+        'aud_province': json.loads(to_json(aud_province)),
+        'demo': json.loads(to_json(demo)),
+        'geo': json.loads(to_json(geo)),
+        'trends': json.loads(to_json(trends)),
+        'loyalty': json.loads(to_json(loyalty)),
+        'timepatterns': json.loads(to_json(timepatterns)),
+    }, default=str)
 
-size_mb = len(data_json) / 1024 / 1024
-print(f'  Data size: {size_mb:.1f} MB')
+    size_mb = len(data_json) / 1024 / 1024
+    print(f'  Data size: {size_mb:.1f} MB')
+
+    with open(CACHE_FILE, 'w') as f:
+        f.write(data_json)
+    print(f'  Cached to: {CACHE_FILE}')
+    print(f'  Next time use: python3 scripts/generate_dashboard.py --cached')
+
+    cats = sorted(benchmarks['CATEGORY_TWO'].unique().tolist()) if benchmarks is not None else []
 
 now = datetime.now().strftime('%d %B %Y')
-cats = sorted(benchmarks['CATEGORY_TWO'].unique().tolist()) if benchmarks is not None else []
 
 # ═══════════════════════════════════════════════════════════════
 # HTML
@@ -539,6 +565,7 @@ tr:hover{{background:#f8fafc}}
 <div class="filters" id="filterbar">
 <label>Category</label>
 <select id="fCat" onchange="onFilter()">
+<option value="">All categories</option>
 {''.join(f'<option value="{c}">{c}</option>' for c in cats)}
 </select>
 <label>Client</label>
@@ -726,7 +753,10 @@ function showPage(n) {{
 function onFilter() {{
     const cat = document.getElementById('fCat').value;
     // Get clients sorted by total_spend descending (biggest first)
-    const catBench = D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).sort((a,b)=>b.total_spend-a.total_spend);
+    // If no category selected (All), show all destinations
+    const catBench = cat
+        ? D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).sort((a,b)=>b.total_spend-a.total_spend)
+        : D.benchmarks.sort((a,b)=>b.total_spend-a.total_spend);
     const clients = catBench.map(b=>b.DESTINATION);
     // Remove duplicates while preserving order
     const uniqueClients = [...new Set(clients)];
@@ -807,10 +837,38 @@ function renderPitch() {{
     const cat = document.getElementById('fCat').value;
     const client = document.getElementById('fClient').value;
     const topN = parseInt(document.getElementById('fTopN').value);
-    if(!cat || !client) return;
+    if(!client) return;
 
-    // Full list for this category (for client KPI lookup)
-    const allComps = D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).sort((a,b)=>b.total_spend-a.total_spend);
+    // Filter helper — if cat is empty (All), don't filter by category
+    const byCat = arr => cat ? arr.filter(b=>b.CATEGORY_TWO===cat) : arr;
+
+    // For "All categories" view, aggregate by destination across categories
+    let allComps;
+    if(!cat) {{
+        // Group by destination, sum spend across categories
+        const destMap = {{}};
+        D.benchmarks.forEach(b => {{
+            if(!destMap[b.DESTINATION]) destMap[b.DESTINATION] = {{DESTINATION:b.DESTINATION, CATEGORY_TWO:'All', customers:0, total_spend:0, transactions:0, market_share_pct:0, penetration_pct:0, avg_txn_value:0, spend_per_customer:0, avg_share_of_wallet:0, spend_rank:0, _count:0}};
+            const d = destMap[b.DESTINATION];
+            d.customers += (b.customers||0);
+            d.total_spend += (b.total_spend||0);
+            d.transactions += (b.transactions||0);
+            d._count++;
+        }});
+        allComps = Object.values(destMap).sort((a,b)=>b.total_spend-a.total_spend);
+        // Calculate rank and averages
+        allComps.forEach((d,i) => {{
+            d.spend_rank = i+1;
+            d.avg_txn_value = d.transactions ? Math.round(d.total_spend/d.transactions) : 0;
+            d.spend_per_customer = d.customers ? Math.round(d.total_spend/d.customers) : 0;
+            const totalSpend = allComps.reduce((s,x)=>s+x.total_spend,0);
+            d.market_share_pct = totalSpend ? Math.round(d.total_spend/totalSpend*1000)/10 : 0;
+            const totalCust = allComps.reduce((s,x)=>s+x.customers,0);
+            d.penetration_pct = totalCust ? Math.round(d.customers/totalCust*1000)/10 : 0;
+        }});
+    }} else {{
+        allComps = D.benchmarks.filter(b=>b.CATEGORY_TWO===cat).sort((a,b)=>b.total_spend-a.total_spend);
+    }}
     // Top N for competitor charts
     let comps = allComps.slice(0, topN);
     // Make sure selected client is always in the competitor list even if outside topN
@@ -856,7 +914,7 @@ function renderPitch() {{
     makeChart('chCompSpc', {{type:'bar',data:{{labels,datasets:[{{data:comps.map(c=>c.spend_per_customer),backgroundColor:colors,borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{{legend:{{display:false}}}},scales:{{x:{{ticks:{{callback:v=>fmt(v)}}}}}}}}}});
 
     // Loyalty
-    const loy = (D.loyalty||[]).filter(l=>l.CATEGORY_TWO===cat).sort((a,b)=>b.pct_loyal_50-a.pct_loyal_50).slice(0,topN);
+    const loy = byCat(D.loyalty||[]).sort((a,b)=>b.pct_loyal_50-a.pct_loyal_50).slice(0,topN);
     if(loy.length) {{
         const loyLabels = loy.map(l => destName(l.DESTINATION, client, loy.indexOf(l)+1));
         const loyColors = loy.map(l => l.DESTINATION===client ? '#d97706' : '#1e3a5f');
@@ -865,14 +923,14 @@ function renderPitch() {{
 
     // SOW bands
     if(ck && D.loyalty) {{
-        const cl = D.loyalty.find(l=>l.CATEGORY_TWO===cat && l.DESTINATION===client);
+        const cl = byCat(D.loyalty||[]).find(l=>l.DESTINATION===client);
         if(cl) {{
             makeChart('chSow', {{type:'bar',data:{{labels:['1 store','2 stores','3-4','5-7','8+'],datasets:[{{data:[cl.band_1_store,cl.band_2_stores,cl.band_3_4_stores,cl.band_5_7_stores,cl.band_8_plus],backgroundColor:['#0f172a','#1e3a5f','#2E75B6','#94a3b8','#d1d5db'],borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}},title:{{display:true,text:client+' customer loyalty bands'}}}}}}}});
         }}
     }}
 
     // Trend
-    const catTrends = (D.trends||[]).filter(t=>t.CATEGORY_TWO===cat);
+    const catTrends = byCat(D.trends||[]);
     const months = [...new Set(catTrends.map(t=>t.month))].sort();
     const clientTrend = months.map(m => {{ const r = catTrends.find(t=>t.month===m&&t.DESTINATION===client); return r?r.spend/1e6:0; }});
     const catTotal = months.map(m => catTrends.filter(t=>t.month===m).reduce((s,t)=>s+t.spend,0)/1e6);
@@ -882,7 +940,7 @@ function renderPitch() {{
     ]}},options:{{responsive:true,maintainAspectRatio:false,scales:{{y:{{ticks:{{callback:v=>'R'+v+'M'}}}}}}}}}});
 
     // Time patterns table
-    const tp = (D.timepatterns||[]).filter(t=>t.CATEGORY_TWO===cat).slice(0,topN);
+    const tp = byCat(D.timepatterns||[]).slice(0,topN);
     if(tp.length) {{
         document.getElementById('timeTable').innerHTML = tableHtml(
             ['Store','Morning','Midday','Afternoon','Evening','Weekend'],
@@ -891,7 +949,7 @@ function renderPitch() {{
     }}
 
     // Demographics
-    const dm = (D.demo||[]).filter(d=>d.CATEGORY_TWO===cat);
+    const dm = byCat(D.demo||[]);
     const ages = {{}};
     dm.forEach(d => {{ if(d.age_group) ages[d.age_group] = (ages[d.age_group]||0) + d.customers; }});
     const ageLabels = Object.keys(ages).sort();
@@ -907,7 +965,7 @@ function renderPitch() {{
     makeChart('chIncome', {{type:'bar',data:{{labels:incLabels,datasets:[{{data:incLabels.map(i=>incomes[i]/1e6),backgroundColor:'#2E75B6',borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{y:{{ticks:{{callback:v=>'R'+v+'M'}}}}}}}}}});
 
     // Geo
-    const gd = (D.geo||[]).filter(g=>g.CATEGORY_TWO===cat).sort((a,b)=>b.spend-a.spend).slice(0,9);
+    const gd = byCat(D.geo||[]).sort((a,b)=>b.spend-a.spend).slice(0,9);
     makeChart('chGeo', {{type:'bar',data:{{labels:gd.map(g=>g.PROVINCE),datasets:[{{data:gd.map(g=>g.spend/1e6),backgroundColor:'#0f172a',borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{{legend:{{display:false}}}},scales:{{x:{{ticks:{{callback:v=>'R'+v+'M'}}}}}}}}}});
 }}
 
