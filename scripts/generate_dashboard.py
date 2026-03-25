@@ -91,13 +91,26 @@ if LOW_FILE.exists():
 else:
     print(f'  Banner: none (put low.png in assets/ folder)')
 
-# Embed background logo as base64
+# Embed background logo as base64 (faint)
 bg_logo_b64 = ''
 BG_LOGO_FILE = SCRIPT_DIR.parent / 'assets' / 'logo3.png'
 if BG_LOGO_FILE.exists():
-    with open(BG_LOGO_FILE, 'rb') as f:
-        bg_logo_b64 = base64.b64encode(f.read()).decode()
-    print(f'  BG Logo: {BG_LOGO_FILE.name} ({len(bg_logo_b64)//1024}KB base64)')
+    try:
+        from PIL import Image, ImageEnhance
+        import io
+        img = Image.open(BG_LOGO_FILE).convert('RGBA')
+        # Make it very faint — 8% opacity
+        alpha = img.split()[3]
+        alpha = alpha.point(lambda p: int(p * 0.08))
+        img.putalpha(alpha)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG', optimize=True)
+        bg_logo_b64 = base64.b64encode(buf.getvalue()).decode()
+        print(f'  BG Logo: {BG_LOGO_FILE.name} faded to 8% ({len(bg_logo_b64)//1024}KB)')
+    except ImportError:
+        with open(BG_LOGO_FILE, 'rb') as f:
+            bg_logo_b64 = base64.b64encode(f.read()).decode()
+        print(f'  BG Logo: {BG_LOGO_FILE.name} ({len(bg_logo_b64)//1024}KB) — install Pillow for fading')
 else:
     print(f'  BG Logo: none (put logo3.png in assets/ folder)')
 
@@ -411,7 +424,7 @@ html = f"""<!DOCTYPE html>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:'DM Sans',sans-serif;background-color:#f8fafc;{"" if not bg_logo_b64 else "background-image:url(data:image/png;base64," + bg_logo_b64 + ");background-repeat:space;background-size:200px;"}color:#1a202c}}
+body{{font-family:'DM Sans',sans-serif;background-color:#f8fafc;{"" if not bg_logo_b64 else "background-image:url(data:image/png;base64," + bg_logo_b64 + ");background-repeat:space;background-size:500px;"}color:#1a202c}}
 #hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:0 24px;display:flex;align-items:center;gap:12px;height:42px;overflow:hidden}}
 #hdr h1{{font-size:1.05rem;font-weight:600;white-space:nowrap}}
 #hdr .meta{{font-size:.68rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.3;white-space:nowrap}}
