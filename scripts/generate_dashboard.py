@@ -402,10 +402,11 @@ html = f"""<!DOCTYPE html>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
-#hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:0 24px;display:flex;align-items:center;gap:12px;height:56px;overflow:hidden}}
+#logo-row{{background:#fff;padding:10px 24px;display:flex;align-items:center;justify-content:center}}
+#logo-row img{{height:80px;width:auto;object-fit:contain}}
+#hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:0 24px;display:flex;align-items:center;gap:12px;height:42px;overflow:hidden}}
 #hdr h1{{font-size:1.05rem;font-weight:600;white-space:nowrap}}
 #hdr .meta{{font-size:.68rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.3;white-space:nowrap}}
-#hdr .logo{{height:42px;width:auto;object-fit:contain}}
 .tabs{{display:flex;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 16px;overflow-x:auto}}
 .tab{{padding:7px 14px;font-size:.8rem;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}}
 .tab:hover{{color:#1e3a5f;background:#f8fafc}}
@@ -500,8 +501,8 @@ tr:hover{{background:#f8fafc}}
 </style>
 </head><body>
 
+{'<div id="logo-row"><img src="data:image/png;base64,' + logo_b64 + '" alt="logo"></div>' if logo_b64 else ''}
 <div id="hdr">
-{'<img class="logo" src="data:image/png;base64,' + logo_b64 + '" alt="logo">' if logo_b64 else ''}
 <h1>{brand['brand_name']} {'· ' + brand.get('tagline','') if brand.get('tagline') else ''}</h1>
 <span class="meta">{PROJECT} · Generated {now}<br>{'Confidential · ' if brand.get('confidential') else ''}Data period shown on Overview</span>
 </div>
