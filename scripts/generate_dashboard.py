@@ -29,7 +29,6 @@ OUT = 'nav_dashboard.html'
 # ── Load brand config ──
 SCRIPT_DIR = Path(__file__).parent
 BRAND_FILE = SCRIPT_DIR.parent / 'assets' / 'brand.json'
-LOGO_FILE = SCRIPT_DIR.parent / 'assets' / 'logo.png'
 
 brand = {
     'brand_name': 'NAV Analytics',
@@ -57,14 +56,40 @@ if BRAND_FILE.exists():
 else:
     print(f'  Brand: default (no assets/brand.json found)')
 
-# Embed logo as base64
+# Embed logo as base64 (resize if huge)
 logo_b64 = ''
+LOGO_FILE = SCRIPT_DIR.parent / 'assets' / 'logo.png'
 if LOGO_FILE.exists():
-    with open(LOGO_FILE, 'rb') as f:
-        logo_b64 = base64.b64encode(f.read()).decode()
-    print(f'  Logo: {LOGO_FILE.name} ({len(logo_b64)//1024}KB base64)')
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(LOGO_FILE)
+        if max(img.size) > 400:
+            img.thumbnail((400, 400), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format='PNG', optimize=True)
+            logo_b64 = base64.b64encode(buf.getvalue()).decode()
+            print(f'  Logo: {LOGO_FILE.name} resized {img.size} ({len(logo_b64)//1024}KB)')
+        else:
+            with open(LOGO_FILE, 'rb') as f:
+                logo_b64 = base64.b64encode(f.read()).decode()
+            print(f'  Logo: {LOGO_FILE.name} ({len(logo_b64)//1024}KB)')
+    except ImportError:
+        with open(LOGO_FILE, 'rb') as f:
+            logo_b64 = base64.b64encode(f.read()).decode()
+        print(f'  Logo: {LOGO_FILE.name} ({len(logo_b64)//1024}KB) — install Pillow to auto-resize')
 else:
     print(f'  Logo: none (put logo.png in assets/ folder)')
+
+# Embed bottom banner as base64
+low_b64 = ''
+LOW_FILE = SCRIPT_DIR.parent / 'assets' / 'low.png'
+if LOW_FILE.exists():
+    with open(LOW_FILE, 'rb') as f:
+        low_b64 = base64.b64encode(f.read()).decode()
+    print(f'  Banner: {LOW_FILE.name} ({len(low_b64)//1024}KB base64)')
+else:
+    print(f'  Banner: none (put low.png in assets/ folder)')
 
 BC = brand['colors']
 
@@ -380,7 +405,7 @@ body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
 #hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
 #hdr h1{{font-size:1.3rem;font-weight:600}}
 #hdr .meta{{font-size:.75rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.6}}
-#hdr .logo{{height:36px;margin-right:4px}}
+#hdr .logo{{height:40px;width:auto;object-fit:contain;margin-right:4px}}
 .tabs{{display:flex;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 16px;overflow-x:auto}}
 .tab{{padding:10px 18px;font-size:.85rem;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}}
 .tab:hover{{color:#1e3a5f;background:#f8fafc}}
@@ -447,6 +472,8 @@ body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
 .modal-channels{{display:flex;gap:8px;margin:12px 0}}
 .modal-ch{{padding:6px 16px;border-radius:6px;font-size:.8rem;font-weight:600;color:#fff}}
 .aud-card{{cursor:pointer}}
+.pg-banner{{width:100%;margin-top:20px;display:block}}
+.pg-banner img{{width:100%;height:auto;display:block}}
 .row{{display:grid;gap:12px;margin-bottom:14px}}
 .r2{{grid-template-columns:1fr 1fr}}.r3{{grid-template-columns:1fr 1fr 1fr}}.r4{{grid-template-columns:1fr 1fr 1fr 1fr}}.r5{{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:768px){{.r2,.r3,.r4,.r5{{grid-template-columns:1fr}}}}
@@ -1146,9 +1173,22 @@ function barRow(label, value, max, display, color) {{
 document.addEventListener('keydown', e => {{ if(e.key==='Escape') closeModal(); }});
 
 // ─── INIT ───
+const LOW_B64 = '{low_b64}';
+
 function init() {{
     // Hide filters on Overview (they only show on Client Pitch)
     document.getElementById('filterbar').style.display = 'none';
+
+    // Add bottom banner to every page
+    if(LOW_B64) {{
+        document.querySelectorAll('.pg').forEach(pg => {{
+            const banner = document.createElement('div');
+            banner.className = 'pg-banner';
+            banner.innerHTML = `<img src="data:image/png;base64,${{LOW_B64}}" alt="">`;
+            pg.appendChild(banner);
+        }});
+    }}
+
     // Populate client dropdown for first category
     onFilter();
     // Render all static pages
@@ -1157,7 +1197,6 @@ function init() {{
     renderChurn();
     renderCategories();
     renderAudiences();
-    // renderPitch is called by onFilter() already, and will run again when user clicks Client Pitch tab
 }}
 
 init();
