@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meeting Prep — Rory Briefing</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#1a202c;padding:16px}
+.c{max-width:800px;margin:0 auto}
+.tabs{display:flex;gap:3px;margin-bottom:16px;flex-wrap:wrap;position:sticky;top:0;background:#f8fafc;padding:8px 0;z-index:10}
+.tb{padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;color:#64748b;background:#fff;border:1px solid #e2e8f0;font-weight:500}
+.tb.a{background:#1e3a5f;color:#fff;border-color:#1e3a5f}
+.pg{display:none}.pg.a{display:block}
+h3{font-size:16px;font-weight:600;color:#0f172a;margin:18px 0 8px}
+p{font-size:13.5px;color:#475569;line-height:1.7;margin:4px 0}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0}
+.k{background:#fff;border-radius:8px;padding:10px 12px;border:1px solid #f1f5f9}
+.k .v{font-size:20px;font-weight:600;color:#0f172a}
+.k .l{font-size:11px;color:#94a3b8;margin-top:2px}
+.k .x{font-size:11px;color:#2563eb;margin-top:2px}
+.say{font-size:13px;padding:10px 14px;border-radius:8px;margin:8px 0;border-left:3px solid #2563eb;background:#eff6ff;color:#1e3a5f;line-height:1.7}
+.say::before{content:"SAY: ";font-weight:700;color:#1e40af}
+.qa{background:#fff;border-radius:8px;padding:12px 14px;margin:8px 0;border:1px solid #f1f5f9}
+.qa .q{font-size:13.5px;font-weight:600;color:#0f172a;margin-bottom:6px}
+.qa .q::before{content:"Q: ";color:#dc2626}
+.qa .a{font-size:13px;color:#475569;line-height:1.7}
+.qa .a::before{content:"A: ";font-weight:600;color:#16a34a}
+.warn{font-size:12.5px;color:#92400e;background:#fef3c7;padding:8px 12px;border-radius:8px;margin:8px 0;border-left:3px solid #f59e0b}
+.warn::before{content:"⚠ CAREFUL: ";font-weight:700}
+</style>
+</head><body>
+<div class="c">
+
+<h1 style="font-size:22px;font-weight:700;margin-bottom:4px">Meeting prep — Rory briefing</h1>
+<p style="color:#94a3b8;margin-bottom:12px">Click tabs to jump between pages. Blue boxes = what to say out loud.</p>
+
+<div class="tabs" id="tabs">
+<div class="tb a" onclick="sp(0)">Overview</div>
+<div class="tb" onclick="sp(1)">Client pitch</div>
+<div class="tb" onclick="sp(2)">Segments</div>
+<div class="tb" onclick="sp(3)">Churn & CLV</div>
+<div class="tb" onclick="sp(4)">Categories</div>
+<div class="tb" onclick="sp(5)">Audiences</div>
+<div class="tb" onclick="sp(6)">Likely Q&A</div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="pg a" id="p0">
+<h3>Overview page — the numbers</h3>
+<div class="kpi">
+<div class="k"><div class="v">2.24B</div><div class="l">Transactions</div><div class="x">Total card swipes in our data</div></div>
+<div class="k"><div class="v">7.26M</div><div class="l">Customers</div><div class="x">Unique FNB cardholders</div></div>
+<div class="k"><div class="v">5.79M</div><div class="l">Segmented</div><div class="x">Customers our ML model classified</div></div>
+<div class="k"><div class="v">5.53M</div><div class="l">Churn scored</div><div class="x">Customers with a churn probability</div></div>
+<div class="k"><div class="v">14.5K</div><div class="l">Destinations</div><div class="x">Unique merchants/stores</div></div>
+</div>
+
+<h3>Segment donut</h3>
+<div class="say">We clustered 5.79M customers into 5 behavioural segments using k-means on 9 features — recency, frequency, spend, merchant diversity, category spread, weekend patterns. The model found these groups naturally in the data.</div>
+<p><b>Champions (8.2%)</b> — top spenders, most active, 1-day recency, 128 merchants. 8% of customers but ~45% of revenue.</p>
+<p><b>Loyal (14.8%)</b> — consistent spenders, 6-day recency, 73 merchants.</p>
+<p><b>Mid-Tier (30.1%)</b> — moderate spend, 14-day recency, 28 merchants. Biggest upsell opportunity.</p>
+<p><b>At Risk (19.9%)</b> — used to be active, 247-day recency. Re-engagement targets.</p>
+<p><b>Dormant (27%)</b> — lowest activity. 27% of people, under 5% of revenue.</p>
+
+<h3>Revenue concentration chart</h3>
+<div class="say">This is the Pareto effect. Champions are 8% of people but 45% of revenue. Dormant are 27% of people but under 5% of revenue. The pitch to advertisers: targeting Champions gives you disproportionate return on every rand spent.</div>
+
+<h3>Churn risk</h3>
+<div class="say">We built a logistic regression model that scores every customer's probability of going inactive. 666K customers — 12% of the base — are Critical or High risk. That's R31.6B in annual spend at risk. Even a 10% recovery = R3.16B saved.</div>
+</div>
+
+<!-- CLIENT PITCH -->
+<div class="pg" id="p1">
+<h3>What this page does</h3>
+<div class="say">This is the dealmaker's page. Pick any category and client from the dropdowns — every chart updates instantly. In a pitch meeting you open this, select the client, and their entire profile is in front of you. What used to take 3 hours of manual SQL now takes one dropdown change.</div>
+
+<h3>KPIs — what each means</h3>
+<p><b>Customers</b> — how many FNB cardholders shop at this store</p>
+<p><b>Total spend</b> — total card spend at this store (last 12 months)</p>
+<p><b>Market share</b> — this store's spend as % of total category spend</p>
+<p><b>Penetration</b> — % of all category customers who shop here</p>
+<p><b>Avg transaction</b> — average basket size per visit</p>
+<p><b>Spend/customer</b> — annual spend per customer at this store</p>
+<p><b>Rank</b> — position vs all competitors by total spend</p>
+<p><b>Share of wallet</b> — of a customer's total category spend, how much goes here</p>
+
+<h3>Competitor bars</h3>
+<div class="say">The gold bar is the selected client. Dark bars are competitors. This instantly shows where the client sits. Example pitch line: "You're #1 in market share but #3 in spend per customer — your customers come often but spend less per visit than competitors. There's an upsell opportunity."</div>
+
+<h3>Internal vs External toggle</h3>
+<div class="say">Internal shows real competitor names — for our team only. External anonymizes to "Competitor #1, #2, #3". We use external when presenting to clients — we can't reveal competitor data by name.</div>
+
+<h3>Store loyalty</h3>
+<p>Shows what % of a store's customers give it 50%+ of their category spend. High = sticky customers. Low = they're splitting across many stores.</p>
+
+<h3>Time patterns</h3>
+<p>When customers shop — morning, midday, afternoon, evening, weekend. Useful for ad scheduling.</p>
+<div class="say">Example: "Your customers shop Friday evenings — that's when to run your digital campaign for maximum reach."</div>
+
+<h3>Demographics + Geography</h3>
+<p>Age, gender, income distribution, and provincial spend — all filtered to the selected category. This tells the advertiser WHO their customers are and WHERE they are.</p>
+</div>
+
+<!-- SEGMENTS -->
+<div class="pg" id="p2">
+<h3>Segment profiles table</h3>
+<div class="say">Each row is a customer segment. The columns show average behaviours. Champions: R771k avg spend, 1,570 transactions, 1-day recency, 128 merchants. Dormant: R11k spend, 35 transactions, 45+ day recency, 8 merchants. The separation is massive — these are genuinely different customer types.</div>
+
+<h3>Retention curve</h3>
+<p>Shows what % of customers are still active after N months. Starts at 100%, typically drops to ~38% by month 12.</p>
+<div class="say">This tells advertisers how long their audience stays engaged. "After 6 months, 55% of your customers are still active — that's strong retention and means your campaign ROI sustains over time."</div>
+
+<h3>Spend momentum</h3>
+<p><b>Accelerating</b> — spending more recently (growing customers)</p>
+<p><b>Steady</b> — consistent spend</p>
+<p><b>Slowing</b> — still active but declining</p>
+<p><b>Declining</b> — significant drop, needs intervention</p>
+<div class="say">The urgency score tells you who to act on first. Declining + high historical spend = call them tomorrow. These are customers actively walking away.</div>
+</div>
+
+<!-- CHURN -->
+<div class="pg" id="p3">
+<h3>The headline story</h3>
+<div class="say">666K customers at Critical or High churn risk, representing R31.6B in spend. The model uses 15 features to predict who's about to leave. 83% accuracy on validation data.</div>
+
+<h3>Churn drivers chart</h3>
+<p>Shows WHY customers churn — long inactivity, dropping frequency, declining merchant diversity, spend drops. This is the explainability layer.</p>
+<div class="say">This is gold for retention. "These 178K customers are churning because their visit frequency dropped — send them a comeback offer targeting their peak shopping day."</div>
+
+<h3>CLV tiers</h3>
+<p><b>Platinum</b> — highest predicted future value. Protect at all costs.</p>
+<p><b>Gold/Silver</b> — strong value, good upsell targets.</p>
+<p><b>Bronze/Basic</b> — lower value, mass campaigns only.</p>
+<div class="say">The killer insight: cross-reference CLV with churn. Platinum CLV + Critical churn = red alert. These are your most valuable customers about to leave. That's the list you action first.</div>
+</div>
+
+<!-- CATEGORIES -->
+<div class="pg" id="p4">
+<h3>Health scorecard</h3>
+<p>Each row is a spending category — customers, spend, growth %, churn %, Champion %, Dormant %, leader, health status.</p>
+<div class="say">If Rory asks "which categories should we focus on?" — look at growth + low churn + high Champion %. Those are healthy categories worth pitching to advertisers. Declining + high Dormant % = categories losing customers.</div>
+
+<h3>Cross-sell affinity (lift)</h3>
+<p>Lift 3.2x = customers who buy Groceries are 3.2 times more likely to also buy Clothing than a random customer.</p>
+<div class="say">Pitch angle: "If you're advertising Clothing, we can target Grocery shoppers — they're 3.2x more likely to cross-shop. That's a lookalike audience built from real transaction data, not interest guesses."</div>
+
+<h3>Pitch opportunities</h3>
+<p>Ranked by composite score combining market share, addressable market, gap to leader.</p>
+<div class="say">The dealmaking team uses this to prioritize outreach. "Nike scores 87 — large addressable market, low current share, big gap to the leader. High probability they'll want our data to close that gap."</div>
+</div>
+
+<!-- AUDIENCES -->
+<div class="pg" id="p5">
+<h3>What this page is</h3>
+<div class="say">This is our audience marketplace — like Flow but built from FNB's own first-party transaction data. Each card is a pre-packaged audience ready for activation via LiveRamp to Meta, Google, TikTok. An advertiser browses, picks an audience, and we push it to their ad platform.</div>
+
+<h3>Audience types</h3>
+<p><b>Demographic</b> — income, age, gender (e.g. "Affluent professionals")</p>
+<p><b>Lifestyle</b> — category spend patterns (e.g. "Food lovers" = 40%+ spend on food)</p>
+<p><b>Behavioral</b> — from ML segments (e.g. "Champions", "At-risk high spenders")</p>
+<p><b>Seasonal</b> — time patterns (e.g. "Black Friday power shoppers")</p>
+<p><b>Geographic</b> — provincial (e.g. "Gauteng metro")</p>
+<p><b>Cross-category</b> — multi-category (e.g. "Premium lifestyle bundle")</p>
+
+<h3>Card numbers</h3>
+<p><b>Reach</b> — real audience size (actual customers we can target)</p>
+<p><b>Avg spend</b> — annual spend (higher = more valuable audience)</p>
+<p><b>Avg age / % female</b> — demographic profile</p>
+<p><b>Meta · Google · TikTok</b> — activation channels via LiveRamp</p>
+<div class="say">Click any card to see the full breakdown — top categories, top merchants, age distribution, income bands, gender split, provincial spread. All from real FNB transaction data on 7.2M customers.</div>
+
+<div class="warn">LiveRamp: we have access but haven't pushed audiences yet. The identity matching method needs to be confirmed with the LiveRamp team. Data is ready — the activation pipe is the next step.</div>
+</div>
+
+<!-- Q&A -->
+<div class="pg" id="p6">
+<h3>Questions he'll probably ask</h3>
+
+<div class="qa">
+<div class="q">How fresh is this data?</div>
+<div class="a">Last 12 months of transaction data. The exact date range shows on the Overview page. Data refreshes when we re-run the pipeline — currently manual, can be scheduled daily if needed.</div>
+</div>
+
+<div class="qa">
+<div class="q">Can we filter by date range?</div>
+<div class="a">Not in the HTML version — it's a point-in-time snapshot. The Looker Studio version being built will have date filters. For now, we can regenerate with different date windows by changing a parameter.</div>
+</div>
+
+<div class="qa">
+<div class="q">How much did this cost?</div>
+<div class="a">About R700 in BigQuery compute for the initial full run across 2.2 billion transactions. Daily refreshes would be under R1. The dashboard itself is a static HTML file — zero hosting cost.</div>
+</div>
+
+<div class="qa">
+<div class="q">Can dealmakers use this themselves?</div>
+<div class="a">Yes. Open the HTML, pick category and client from dropdowns, everything updates live in the browser. No BigQuery access needed. Share on Teams or a shared drive.</div>
+</div>
+
+<div class="qa">
+<div class="q">How do we activate audiences?</div>
+<div class="a">Audience member lists are in BigQuery. Push to LiveRamp, which matches to Meta/Google/TikTok ad accounts. We have LiveRamp access — next step is confirming identity matching with their team.</div>
+</div>
+
+<div class="qa">
+<div class="q">Can we brand this for First Advertising?</div>
+<div class="a">Already built in. Drop in the logo and hex color codes, run one command, entire dashboard rebrands — header, charts, footer, everything. Two minutes.</div>
+</div>
+
+<div class="qa">
+<div class="q">What about POPIA?</div>
+<div class="a">No individual customer data leaves BigQuery. Dashboard shows aggregated stats only — segment averages, category totals, demographic distributions. No names, no account numbers. Audience activation via LiveRamp uses hashed identifiers — POPIA compliant by design.</div>
+</div>
+
+<div class="qa">
+<div class="q">How accurate is the ML?</div>
+<div class="a">K-means: Davies-Bouldin 1.295 (under 2.0 = well separated). Churn: 83.1% accuracy. Segments show clear separation — Champions R771k avg spend vs Dormant R11k. These aren't arbitrary groups — the model found genuine behavioural clusters.</div>
+</div>
+
+<div class="qa">
+<div class="q">Can we do brand-level like Revlon?</div>
+<div class="a">Data is at store + category level, not brand/product. But we proxy: Clicks Health & Beauty shoppers, filtered by demographics matching the brand's target. That's what the Clicks report shows. It's the best anyone can do without SKU-level data.</div>
+</div>
+
+<div class="qa">
+<div class="q">When is Looker Studio ready?</div>
+<div class="a">Simphiwe is building from a step-by-step guide. All 18 data sources are created in BigQuery. ETA end of next week. The HTML dashboard is the working deliverable right now.</div>
+</div>
+
+<div class="qa">
+<div class="q">Can this be shown at the Google Event?</div>
+<div class="a">Absolutely. Once Nhlanhla sends the brand assets and colours, one command rebrands everything. Takes 2 minutes to regenerate.</div>
+</div>
+</div>
+
+<script>
+function sp(n){
+document.querySelectorAll('.pg').forEach((p,i)=>p.classList.toggle('a',i===n));
+document.querySelectorAll('.tb').forEach((t,i)=>t.classList.toggle('a',i===n));
+}
+</script>
+</div>
+</body></html>
