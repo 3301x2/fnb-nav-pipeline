@@ -402,12 +402,12 @@ html = f"""<!DOCTYPE html>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
-#hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
-#hdr h1{{font-size:1.3rem;font-weight:600}}
-#hdr .meta{{font-size:.75rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.6}}
-#hdr .logo{{height:100px;width:auto;object-fit:contain;margin-right:12px}}
+#hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:8px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}}
+#hdr h1{{font-size:1.1rem;font-weight:600}}
+#hdr .meta{{font-size:.7rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.4}}
+#hdr .logo{{height:200px;width:auto;object-fit:contain}}
 .tabs{{display:flex;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 16px;overflow-x:auto}}
-.tab{{padding:10px 18px;font-size:.85rem;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}}
+.tab{{padding:7px 14px;font-size:.8rem;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}}
 .tab:hover{{color:#1e3a5f;background:#f8fafc}}
 .tab.a{{color:{BC['tab_active']};border-bottom-color:{BC['tab_active']}}}
 .filters{{background:#fff;padding:10px 24px;border-bottom:1px solid #e2e8f0;display:flex;gap:12px;flex-wrap:wrap;align-items:center}}
