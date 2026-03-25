@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NAV Dashboard — How We Calculate Everything</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafbfc;color:#1a202c;line-height:1.8;padding:20px}
+.c{max-width:850px;margin:0 auto}
+h1{font-size:1.8rem;font-weight:700;color:#0f172a;margin:0 0 4px}
+h2{font-size:1.3rem;font-weight:700;color:#1e3a5f;margin:28px 0 8px;padding-top:16px;border-top:2px solid #e2e8f0}
+h3{font-size:1rem;font-weight:600;color:#0f172a;margin:16px 0 4px}
+p{margin:6px 0;font-size:.92rem;color:#374151}
+.sub{color:#64748b;font-size:.88rem;margin-bottom:20px}
+.m{background:#fff;border-radius:10px;padding:14px 18px;margin:10px 0;border:1px solid #f1f5f9}
+.m .name{font-size:.95rem;font-weight:600;color:#0f172a;margin-bottom:4px}
+.m .what{font-size:.88rem;color:#475569;margin-bottom:6px;line-height:1.7}
+.m .how{font-size:.85rem;color:#64748b;line-height:1.7;padding:8px 12px;background:#f8fafc;border-radius:6px;border-left:3px solid #2563eb}
+.m .how::before{content:"How: ";font-weight:600;color:#1e40af}
+.m .ex{font-size:.85rem;color:#64748b;margin-top:6px;font-style:italic}
+.m .ex::before{content:"Example: ";font-weight:600;font-style:normal;color:#0f172a}
+.note{background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0;font-size:.88rem;color:#92400e}
+.note::before{content:"Note: ";font-weight:700}
+.source{font-size:.82rem;color:#94a3b8;margin-top:4px}
+nav{position:sticky;top:0;background:#fff;padding:8px 0;border-bottom:1px solid #e2e8f0;z-index:10;margin-bottom:16px;overflow-x:auto;white-space:nowrap}
+nav a{display:inline-block;padding:4px 10px;margin:2px;border-radius:6px;text-decoration:none;color:#64748b;font-size:.82rem;font-weight:500}
+nav a:hover{background:#f1f5f9;color:#1e3a5f}
+</style>
+</head><body>
+<div class="c">
+
+<h1>How we calculate everything</h1>
+<p class="sub">A plain-English explanation of every number on the NAV Analytics Dashboard. No SQL, no code — just what it means and how we get there.</p>
+
+<nav>
+<a href="#data">The data</a>
+<a href="#overview">Overview</a>
+<a href="#pitch">Client pitch</a>
+<a href="#segments">Segments</a>
+<a href="#churn">Churn & CLV</a>
+<a href="#categories">Categories</a>
+<a href="#audiences">Audiences</a>
+</nav>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="data">The underlying data</h2>
+
+<div class="m">
+<div class="name">What data do we use?</div>
+<div class="what">FNB card transaction data — every time an FNB cardholder swipes at a merchant, we see it. We also have demographic data (age, gender, estimated income) for each cardholder.</div>
+<div class="how">We do NOT see what product they bought (no SKU/barcode data). We see: which store, which category, how much they spent, when they swiped, and which province.</div>
+</div>
+
+<div class="m">
+<div class="name">Time period</div>
+<div class="what">All analysis uses the most recent 12 months of data. The exact dates are shown on the Overview page of the dashboard.</div>
+<div class="how">We look at the latest transaction date in the data, then go back 12 months. Everything outside that window is excluded. This keeps the analysis current.</div>
+</div>
+
+<div class="m">
+<div class="name">Data scale</div>
+<div class="what">~2.2 billion transactions across ~7.2 million unique customers at ~14,500 merchants.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="overview">Overview page</h2>
+
+<div class="m">
+<div class="name">Transactions</div>
+<div class="what">Total number of card swipes across all customers and merchants in the dataset.</div>
+</div>
+
+<div class="m">
+<div class="name">Customers</div>
+<div class="what">Total unique FNB cardholders in the dataset.</div>
+</div>
+
+<div class="m">
+<div class="name">Segmented</div>
+<div class="what">How many customers our ML clustering model successfully classified into a segment. Slightly less than total customers because some had insufficient data for the model to classify.</div>
+</div>
+
+<div class="m">
+<div class="name">Churn scored</div>
+<div class="what">How many customers have a churn probability score. We need at least 9 months of history to reliably predict churn, so very new customers are excluded.</div>
+</div>
+
+<div class="m">
+<div class="name">Destinations</div>
+<div class="what">Total unique merchants/stores in the data. This is every place an FNB card was swiped.</div>
+</div>
+
+<div class="m">
+<div class="name">Segment donut chart</div>
+<div class="what">Shows how customers split across 5 behavioural segments. The size of each slice = the percentage of customers in that segment.</div>
+<div class="how">We use a machine learning technique called k-means clustering. It looks at 9 features for each customer (how recently they shopped, how often, how much they spend, how many different stores they visit, how many categories they shop in, weekend vs weekday patterns, etc.) and groups customers who behave similarly. We didn't tell the model what the segments should be — it found them naturally in the data. We then named them based on their characteristics.</div>
+</div>
+
+<div class="m">
+<div class="name">Revenue concentration chart</div>
+<div class="what">Two bars per segment: one showing what % of customers are in that segment, and one showing what % of total revenue they generate.</div>
+<div class="how">For each segment, we divide its customer count by total customers (= % customers) and its total spend by overall total spend (= % revenue). When the revenue bar is much taller than the customer bar, that segment punches above its weight.</div>
+<div class="ex">Champions are 8.2% of customers but generate 44.5% of revenue. Dormant are 27% of customers but generate under 5% of revenue.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="pitch">Client pitch page</h2>
+
+<div class="m">
+<div class="name">Customers (per store)</div>
+<div class="what">Number of unique FNB cardholders who made at least one transaction at this store in the last 12 months.</div>
+</div>
+
+<div class="m">
+<div class="name">Total spend</div>
+<div class="what">Sum of all card spend at this store in the last 12 months.</div>
+<div class="note">This is FNB card spend only. The store's actual total revenue is higher because not all customers use FNB cards.</div>
+</div>
+
+<div class="m">
+<div class="name">Market share</div>
+<div class="what">This store's total spend divided by the total spend across ALL stores in the same category.</div>
+<div class="how">If Woolworths has R31.2B spend in Groceries, and the total grocery category is R178B, then Woolworths' market share = 31.2 / 178 = 17.5%.</div>
+<div class="note">This is market share of FNB card spend, not overall market share. But since FNB has millions of cardholders across all demographics, it's a strong proxy.</div>
+</div>
+
+<div class="m">
+<div class="name">Penetration</div>
+<div class="what">What percentage of all customers who shop in this category also shop at this specific store.</div>
+<div class="how">If 5.2M people buy groceries and 1.93M of them shop at Woolworths, then Woolworths penetration = 1.93 / 5.2 = 37%.</div>
+<div class="ex">37% penetration means Woolworths reaches about 1 in 3 grocery shoppers.</div>
+</div>
+
+<div class="m">
+<div class="name">Average transaction</div>
+<div class="what">Average amount spent per visit (per card swipe) at this store.</div>
+<div class="how">Total spend at this store ÷ total number of transactions at this store.</div>
+<div class="ex">R506 means the average customer spends R506 per visit to this store.</div>
+</div>
+
+<div class="m">
+<div class="name">Spend per customer</div>
+<div class="what">Average annual spend per customer at this store.</div>
+<div class="how">Total spend at this store ÷ number of unique customers who shop there.</div>
+<div class="ex">R16k means each customer spends about R16,000 per year at this store.</div>
+</div>
+
+<div class="m">
+<div class="name">Rank in category</div>
+<div class="what">Where this store sits among all competitors, ranked by total spend. #1 = highest total spend in the category.</div>
+</div>
+
+<div class="m">
+<div class="name">Share of wallet</div>
+<div class="what">Of all the money a customer spends in this category, what percentage goes to this store?</div>
+<div class="how">For each customer, we calculate: spend at this store ÷ total spend in this category. Then we average across all customers. A higher number means customers concentrate their spending here rather than spreading it across competitors.</div>
+<div class="ex">21.8% share of wallet means on average, Woolworths gets about R1 out of every R5 a customer spends on groceries.</div>
+</div>
+
+<div class="m">
+<div class="name">Competitor benchmark bars</div>
+<div class="what">Horizontal bars showing market share (or spend per customer) for the top stores in the category. The selected client is highlighted in gold.</div>
+<div class="how">We rank all stores in the category by total spend, take the top N, and plot their market share side by side.</div>
+</div>
+
+<div class="m">
+<div class="name">Store loyalty (% with 50%+ wallet share)</div>
+<div class="what">What percentage of a store's customers give it more than half of their category spend.</div>
+<div class="how">For each store, count how many customers have share-of-wallet above 50%, then divide by total customers at that store.</div>
+<div class="ex">If 22% of Woolworths customers have 50%+ wallet share, it means 22% of their shoppers do most of their grocery shopping at Woolworths specifically.</div>
+</div>
+
+<div class="m">
+<div class="name">Shopping time patterns</div>
+<div class="what">What percentage of transactions happen in each time slot (morning, midday, afternoon, evening) and on weekends.</div>
+<div class="how">We look at the timestamp of each transaction, bucket it into time slots, and calculate the percentage for each store.</div>
+<div class="ex">If a store shows 35% weekend transactions vs the category average of 28%, their customers over-index on weekend shopping.</div>
+</div>
+
+<div class="m">
+<div class="name">Monthly trend</div>
+<div class="what">Month-by-month spend for the selected client (solid line) vs the total category (dotted line). The gap between the lines = competitor spend.</div>
+<div class="how">We sum all transactions by month for the client, and separately for the whole category. Plotting both shows whether the client is growing faster or slower than the market.</div>
+</div>
+
+<div class="m">
+<div class="name">Demographics (age, gender, income)</div>
+<div class="what">Profile of who shops in this category — age distribution, gender split, and spend by income group.</div>
+<div class="how">We join transaction data with the customer demographic table and aggregate. Age groups and income bands are pre-defined brackets.</div>
+<div class="note">Income is "estimated income" from FNB's data — it's a modelled estimate, not actual salary data.</div>
+</div>
+
+<div class="m">
+<div class="name">Geographic distribution</div>
+<div class="what">Total spend by province for this category.</div>
+<div class="how">Each transaction has a province attached (where the merchant is located). We sum spend by province.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="segments">Segments page</h2>
+
+<div class="m">
+<div class="name">Customer segments (the 5 groups)</div>
+<div class="what">Customers grouped by behaviour, not demographics. Two people of the same age and income can be in different segments if they shop differently.</div>
+<div class="how">K-means clustering on 9 features: total spend, transaction count, days since last transaction (recency), number of active months, number of different merchants visited, number of categories shopped, weekend transaction %, weekday transaction count, and weekend transaction count. The algorithm found 5 natural groupings. We named them based on their average behaviour:
+<br><br>
+<strong>Champions</strong> — highest spend, most frequent, most recent, most merchants. The top tier.<br>
+<strong>Loyal High Value</strong> — strong spend and frequency, not quite Champion level.<br>
+<strong>Steady Mid-Tier</strong> — moderate everything. The backbone of the customer base.<br>
+<strong>At Risk</strong> — used to be more active but recency is high (haven't shopped recently).<br>
+<strong>Dormant</strong> — lowest activity across all features.
+</div>
+</div>
+
+<div class="m">
+<div class="name">Avg spend / Avg transactions / Recency / Merchants</div>
+<div class="what">Average values per segment. These define what makes each segment different.</div>
+<div class="how">Simple averages across all customers in each segment. Recency = days since their last transaction (lower = more recent = more active).</div>
+</div>
+
+<div class="m">
+<div class="name">Cohort retention curve</div>
+<div class="what">Shows what percentage of customers are still active after 1, 2, 3... 12 months.</div>
+<div class="how">We group customers by the month of their first transaction (their "cohort"). Then for each subsequent month, we check if they made at least one transaction. The percentage who are still active at month N = retention at month N.</div>
+<div class="ex">If the curve shows 55% at month 6, it means 55% of customers who joined are still shopping 6 months later. The other 45% have dropped off.</div>
+</div>
+
+<div class="m">
+<div class="name">Spend momentum</div>
+<div class="what">Is each customer spending more or less than before?</div>
+<div class="how">We compare each customer's spend in the most recent 6 months vs the prior 6 months. If recent > prior, they're "Accelerating". If recent < prior by a lot, they're "Declining". The urgency score combines the rate of decline with how much they spend — a big spender declining fast gets a high urgency score.</div>
+<div class="ex">A customer who spent R100k in months 1-6 but only R60k in months 7-12 is "Declining" with a 40% drop. If they're also a Champion, the urgency score is very high.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="churn">Churn & CLV page</h2>
+
+<div class="m">
+<div class="name">Churn probability</div>
+<div class="what">A score from 0% to 100% predicting how likely each customer is to stop transacting.</div>
+<div class="how">We built a logistic regression model trained on historical data. We looked at customers who actually went inactive (didn't transact for 3+ months after a 9-month observation window) and found patterns in their behaviour before they left. The model uses 15 features: recency, frequency, spend amount, spend trend, merchant diversity, category diversity, weekend patterns, etc. It correctly identifies churners about 83% of the time.</div>
+</div>
+
+<div class="m">
+<div class="name">Churn risk levels</div>
+<div class="what">We bucket the probability score into 5 levels for easier action.</div>
+<div class="how">
+<strong>Critical</strong> — probability above 80%. These customers are almost certainly leaving.<br>
+<strong>High</strong> — probability 60-80%. Very likely to leave without intervention.<br>
+<strong>Medium</strong> — probability 40-60%. Could go either way.<br>
+<strong>Low</strong> — probability 20-40%. Probably staying but worth monitoring.<br>
+<strong>Stable</strong> — probability under 20%. Healthy engagement.
+</div>
+</div>
+
+<div class="m">
+<div class="name">Spend at risk</div>
+<div class="what">The total annual spend of all customers in Critical + High risk categories.</div>
+<div class="how">Sum of total_spend for all customers where churn_risk_level = Critical or High. This is the revenue we'd lose if all these customers actually left.</div>
+<div class="ex">R31.6B at risk. Even recovering 10% = R3.16B saved — a strong ROI argument for retention campaigns.</div>
+</div>
+
+<div class="m">
+<div class="name">Churn drivers (why they leave)</div>
+<div class="what">The top reasons customers are flagged as churn risks.</div>
+<div class="how">For each at-risk customer, we look at which features deviated most from healthy customers. If their recency spiked (long time since last visit), that's the primary reason. If their frequency dropped, that's reason #2. We aggregate across all at-risk customers to find the most common drivers.</div>
+</div>
+
+<div class="m">
+<div class="name">Customer Lifetime Value (CLV) tiers</div>
+<div class="what">A prediction of how much each customer will spend in the future.</div>
+<div class="how">We built a linear regression model trained on historical patterns. The model looks at a customer's 12-month spending behaviour and predicts their next 6 months of spend. We then tier them:
+<br><br>
+<strong>Platinum</strong> — top ~10% by predicted value<br>
+<strong>Gold</strong> — next ~15%<br>
+<strong>Silver</strong> — next ~20%<br>
+<strong>Bronze</strong> — next ~25%<br>
+<strong>Basic</strong> — bottom ~30%
+</div>
+<div class="ex">A Platinum customer with predicted CLV of R412k is worth 80x more than a Basic customer at R5k. This drives how much you should spend to retain them.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="categories">Categories page</h2>
+
+<div class="m">
+<div class="name">Category health scorecard</div>
+<div class="what">A snapshot of every spending category's vital signs.</div>
+<div class="how">For each category we calculate:
+<br>
+<strong>Total customers</strong> — unique shoppers in this category<br>
+<strong>Total spend</strong> — sum of all spend in this category<br>
+<strong>Growth %</strong> — spend change vs the prior 12 months<br>
+<strong>Avg churn %</strong> — what proportion of customers in this category are at churn risk<br>
+<strong>% Champions</strong> — what proportion are in the Champions segment<br>
+<strong>% Dormant</strong> — what proportion are Dormant<br>
+<strong>Health status</strong> — Growing (positive growth + low churn), Stable (flat), or Declining (negative growth + high churn)
+</div>
+</div>
+
+<div class="m">
+<div class="name">Cross-sell affinity (lift)</div>
+<div class="what">How much more likely it is that customers who shop in Category A also shop in Category B, compared to a random customer.</div>
+<div class="how">
+Lift = (% of A shoppers who also shop B) ÷ (% of ALL customers who shop B).
+<br><br>
+If 45% of Grocery shoppers also buy Clothing, but only 14% of all customers buy Clothing, then lift = 45% ÷ 14% = 3.2x.
+<br><br>
+Lift > 1 means the categories are positively associated. Lift of 3.2x means Grocery shoppers are 3.2 times more likely to shop Clothing than a random person.
+</div>
+<div class="ex">Use case: "Target your Clothing campaign at Grocery shoppers — they're 3.2x more likely to convert than a generic audience."</div>
+</div>
+
+<div class="m">
+<div class="name">Category propensity</div>
+<div class="what">Which customer segments are most likely to start shopping in a category they haven't tried yet?</div>
+<div class="how">For each segment × category combination, we look at the adoption rate (what % of that segment already shops in that category). If Champions have 90% adoption in Groceries but only 40% in Health, there are 60% "unadopted" Champions who could be targeted. The potential revenue = unadopted count × average spend of Champions who DO shop Health.</div>
+</div>
+
+<div class="m">
+<div class="name">Pitch opportunities</div>
+<div class="what">Ranked list of stores/brands that are the best targets for an advertising pitch.</div>
+<div class="how">Composite score combining:
+<br>
+<strong>Addressable market</strong> — total category spend the brand could capture<br>
+<strong>Current share</strong> — how much they already have (lower = more room to grow)<br>
+<strong>Gap to leader</strong> — difference between this brand and the #1 player<br>
+<strong>Customer base</strong> — how many existing customers to build on<br>
+<strong>Penetration</strong> — what % of category shoppers they already reach<br>
+<br>
+Higher composite score = better pitch opportunity.
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="audiences">Audiences page</h2>
+
+<div class="m">
+<div class="name">What is an audience?</div>
+<div class="what">A pre-defined group of real customers with shared characteristics, packaged and ready to be pushed to advertising platforms (Meta, Google, TikTok) via LiveRamp.</div>
+<div class="how">Each audience is defined by specific rules applied to our data. The customers in each audience are real FNB cardholders — not modelled or estimated. The audience size, demographics, and spend numbers are calculated from actual transaction data.</div>
+</div>
+
+<div class="m">
+<div class="name">Reach (audience size)</div>
+<div class="what">The number of real, unique FNB customers in this audience. This is how many people an advertiser can actually target.</div>
+</div>
+
+<div class="m">
+<div class="name">Avg spend</div>
+<div class="what">Average annual card spend across all customers in this audience. Higher = more valuable audience for advertisers.</div>
+</div>
+
+<div class="m">
+<div class="name">Avg age / % female</div>
+<div class="what">Demographic profile of the audience, calculated from FNB's customer data.</div>
+</div>
+
+<div class="m">
+<div class="name">Avg income</div>
+<div class="what">Average estimated income of customers in this audience. This is FNB's modelled income estimate, not actual salary.</div>
+<div class="note">Previously this card showed "top income bracket" (the most common bracket by headcount). We changed it to average income because the most common bracket can be misleading — a high-spending audience might have lots of people in a low bracket simply because that bracket is the largest in the population.</div>
+</div>
+
+<h3>Audience types — how each is built</h3>
+
+<div class="m">
+<div class="name">Demographic audiences</div>
+<div class="what">Defined by age, income, and gender. Example: "Affluent professionals" = income R56k+ and age 25-55.</div>
+<div class="how">Simple filters on the customer demographic table. If you match the criteria, you're in the audience.</div>
+</div>
+
+<div class="m">
+<div class="name">Lifestyle audiences</div>
+<div class="what">Defined by what categories people spend in. Example: "Food lovers" = customers who spend 40%+ of their total on food categories (groceries, restaurants, food delivery).</div>
+<div class="how">We calculate each customer's spend per category as a percentage of their total spend. If the food percentage crosses the threshold, they're a Food Lover.</div>
+</div>
+
+<div class="m">
+<div class="name">Behavioral audiences</div>
+<div class="what">Defined by our ML models. Example: "High value champions" = customers the k-means model put in the Champions segment.</div>
+<div class="how">These come directly from the ML segmentation output, churn scores, or spend momentum calculations.</div>
+</div>
+
+<div class="m">
+<div class="name">Seasonal audiences</div>
+<div class="what">Defined by when people spend. Example: "Black Friday power shoppers" = customers who spent 2x+ their monthly average in November.</div>
+<div class="how">We compare each customer's November spend to their average monthly spend. If November is 2x or more, they're a Black Friday shopper. Same logic for December (Festive), January (Back to School), and payday patterns (25th-3rd of month).</div>
+</div>
+
+<div class="m">
+<div class="name">Geographic audiences</div>
+<div class="what">Defined by where people shop most. Example: "Gauteng metro" = customers whose most common transaction province is Gauteng.</div>
+<div class="how">We look at all transactions per customer and find their most frequent province. If 60% of their transactions are in Gauteng, their primary province is Gauteng.</div>
+</div>
+
+<div class="m">
+<div class="name">Cross-category audiences</div>
+<div class="what">Defined by shopping across multiple categories. Example: "Premium lifestyle bundle" = customers active in 3+ of: Fashion, Travel, Restaurants, Health, Electronics — with meaningful spend in each.</div>
+<div class="how">We check each customer's category spend and count how many premium categories they're active in (with a minimum spend threshold to avoid counting a single small purchase).</div>
+</div>
+
+<div class="m">
+<div class="name">Audience detail modal (click a card)</div>
+<div class="what">When you click an audience card, you see: top categories they shop, top merchants, age breakdown, income breakdown, gender split, and provincial distribution.</div>
+<div class="how">We join the audience member list back to the transaction and demographic data and aggregate. These are real distributions for the actual customers in that audience — not estimates or national averages.</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>General notes</h2>
+
+<div class="m">
+<div class="name">Internal vs External mode</div>
+<div class="what">Internal shows real competitor names. External anonymizes them to "Competitor #1, #2, #3" ranked by spend. The selected client always shows their real name.</div>
+<div class="how">Same underlying data, different display layer. Used for client-facing presentations where we can't reveal competitor-specific data.</div>
+</div>
+
+<div class="m">
+<div class="name">ML model accuracy</div>
+<div class="what">
+K-means segmentation: Davies-Bouldin score = 1.295. Scores under 2.0 indicate well-separated clusters. Our segments are genuinely distinct — Champions average R771k spend vs Dormant at R11k.<br><br>
+Churn model: 83.1% accuracy, F1 score 0.556. It correctly identifies 83% of outcomes. The F1 score is moderate because churn is imbalanced — most customers don't churn, so the model is conservative about flagging people.
+<br><br>
+CLV model: Linear regression trained on 12-month history predicting 6-month future spend.
+</div>
+</div>
+
+<div class="m">
+<div class="name">Data refresh</div>
+<div class="what">The dashboard shows a snapshot as of the last pipeline run. It is NOT live/real-time. To update: re-run the pipeline, then re-generate the dashboard. Takes about 30 minutes end-to-end.</div>
+</div>
+
+<div class="m">
+<div class="name">Cost</div>
+<div class="what">Initial full pipeline run: ~R700 in BigQuery compute. Subsequent refreshes: under R50. Daily automated runs: ~R1/day. Dashboard HTML: zero hosting cost (it's a file).</div>
+</div>
+
+<div class="m">
+<div class="name">POPIA compliance</div>
+<div class="what">No individual customer data appears on the dashboard — everything is aggregated (averages, totals, percentages). No names, account numbers, or individual transactions are exposed. Audience activation via LiveRamp uses hashed identifiers that cannot be reversed to identify individuals.</div>
+</div>
+
+<p style="margin-top:30px;color:#94a3b8;font-size:.82rem;text-align:center">NAV Analytics · Data & Media Network · Document version: March 2026</p>
+
+</div>
+</body></html>

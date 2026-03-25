@@ -1043,7 +1043,7 @@ function renderAudiences() {{
                 </div>
                 <div class="aud-demog">
                     <div class="di"><div class="dv">${{a.top_age_group||'—'}}</div><div class="dl">Top Age</div></div>
-                    <div class="di"><div class="dv">${{a.top_income_group||'—'}}</div><div class="dl">Top Income</div></div>
+                    <div class="di"><div class="dv">${{a.avg_income ? fmt(a.avg_income) : '—'}}</div><div class="dl">Avg Income</div></div>
                     <div class="di"><div class="dv">${{a.top_province||'—'}}</div><div class="dl">Top Province</div></div>
                 </div>
             </div>
