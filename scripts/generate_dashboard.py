@@ -411,9 +411,7 @@ html = f"""<!DOCTYPE html>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:'DM Sans',sans-serif;background:#f8fafc{"" if not bg_logo_b64 else " url(data:image/png;base64," + bg_logo_b64 + ") repeat"};color:#1a202c;background-size:120px}}
-#logo-row{{background:#fff;padding:10px 24px;display:flex;align-items:center;justify-content:center}}
-#logo-row img{{height:80px;width:auto;object-fit:contain}}
+body{{font-family:'DM Sans',sans-serif;background-color:#f8fafc;{"" if not bg_logo_b64 else "background-image:url(data:image/png;base64," + bg_logo_b64 + ");background-repeat:space;background-size:200px;"}color:#1a202c}}
 #hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:0 24px;display:flex;align-items:center;gap:12px;height:42px;overflow:hidden}}
 #hdr h1{{font-size:1.05rem;font-weight:600;white-space:nowrap}}
 #hdr .meta{{font-size:.68rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.3;white-space:nowrap}}
@@ -511,7 +509,6 @@ tr:hover{{background:#f8fafc}}
 </style>
 </head><body>
 
-{'<div id="logo-row"><img src="data:image/png;base64,' + logo_b64 + '" alt="logo"></div>' if logo_b64 else ''}
 <div id="hdr">
 <h1>{brand['brand_name']} {'· ' + brand.get('tagline','') if brand.get('tagline') else ''}</h1>
 <span class="meta">{PROJECT} · Generated {now}<br>{'Confidential · ' if brand.get('confidential') else ''}Data period shown on Overview</span>
