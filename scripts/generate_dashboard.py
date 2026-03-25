@@ -91,6 +91,16 @@ if LOW_FILE.exists():
 else:
     print(f'  Banner: none (put low.png in assets/ folder)')
 
+# Embed background logo as base64
+bg_logo_b64 = ''
+BG_LOGO_FILE = SCRIPT_DIR.parent / 'assets' / 'logo3.png'
+if BG_LOGO_FILE.exists():
+    with open(BG_LOGO_FILE, 'rb') as f:
+        bg_logo_b64 = base64.b64encode(f.read()).decode()
+    print(f'  BG Logo: {BG_LOGO_FILE.name} ({len(bg_logo_b64)//1024}KB base64)')
+else:
+    print(f'  BG Logo: none (put logo3.png in assets/ folder)')
+
 BC = brand['colors']
 
 def q(sql):
@@ -401,7 +411,7 @@ html = f"""<!DOCTYPE html>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
+body{{font-family:'DM Sans',sans-serif;background:#f8fafc{"" if not bg_logo_b64 else " url(data:image/png;base64," + bg_logo_b64 + ") repeat"};color:#1a202c;background-size:120px}}
 #logo-row{{background:#fff;padding:10px 24px;display:flex;align-items:center;justify-content:center}}
 #logo-row img{{height:80px;width:auto;object-fit:contain}}
 #hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:0 24px;display:flex;align-items:center;gap:12px;height:42px;overflow:hidden}}
