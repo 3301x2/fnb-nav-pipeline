@@ -64,12 +64,12 @@ if LOGO_FILE.exists():
         from PIL import Image
         import io
         img = Image.open(LOGO_FILE)
-        if max(img.size) > 400:
-            img.thumbnail((400, 400), Image.LANCZOS)
+        if max(img.size) > 800:
+            img.thumbnail((800, 800), Image.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format='PNG', optimize=True)
             logo_b64 = base64.b64encode(buf.getvalue()).decode()
-            print(f'  Logo: {LOGO_FILE.name} resized {img.size} ({len(logo_b64)//1024}KB)')
+            print(f'  Logo: {LOGO_FILE.name} resized to {img.size} ({len(logo_b64)//1024}KB)')
         else:
             with open(LOGO_FILE, 'rb') as f:
                 logo_b64 = base64.b64encode(f.read()).decode()
@@ -405,7 +405,7 @@ body{{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#1a202c}}
 #hdr{{background:linear-gradient(135deg,{BC['header_bg']},{BC['header_bg_gradient']});color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
 #hdr h1{{font-size:1.3rem;font-weight:600}}
 #hdr .meta{{font-size:.75rem;opacity:.7;margin-left:auto;text-align:right;line-height:1.6}}
-#hdr .logo{{height:64px;width:auto;object-fit:contain;margin-right:8px}}
+#hdr .logo{{height:100px;width:auto;object-fit:contain;margin-right:12px}}
 .tabs{{display:flex;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 16px;overflow-x:auto}}
 .tab{{padding:10px 18px;font-size:.85rem;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}}
 .tab:hover{{color:#1e3a5f;background:#f8fafc}}
