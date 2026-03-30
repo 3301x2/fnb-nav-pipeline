@@ -167,19 +167,8 @@ for brand in brands:
         GROUP BY 1 ORDER BY spend DESC LIMIT 8
     """))
 
-    # Top co-shopped merchants
-    brand['top_merch'] = recs(q(f"""
-        WITH aud AS (
-            SELECT DISTINCT cs.UNIQUE_ID
-            FROM `{PROJECT}.analytics.int_customer_category_spend` cs
-            JOIN `{PROJECT}.staging.stg_customers` c ON cs.UNIQUE_ID = c.UNIQUE_ID
-            WHERE cs.DESTINATION = '{CLICKS}' AND {brand['filter']}
-        )
-        SELECT cs2.DESTINATION AS merch, COUNT(DISTINCT cs2.UNIQUE_ID) AS customers, ROUND(SUM(cs2.dest_spend),0) AS spend
-        FROM aud a JOIN `{PROJECT}.analytics.int_customer_category_spend` cs2 ON a.UNIQUE_ID = cs2.UNIQUE_ID
-        WHERE cs2.DESTINATION != '{CLICKS}'
-        GROUP BY 1 ORDER BY spend DESC LIMIT 8
-    """))
+    # Top co-shopped merchants — removed from report
+    brand['top_merch'] = []
 
     # Segment breakdown
     brand['segments'] = recs(q(f"""
@@ -194,25 +183,10 @@ for brand in brands:
         GROUP BY 1 ORDER BY n DESC
     """))
 
-    # Province — skip per-brand (too expensive), use shared Clicks province data
+    # Province — removed from report
     brand['province'] = []
 
-# One province query for all Clicks shoppers (shared across brands)
-print('\nQuerying province (once for all brands)...')
-clicks_province = recs(q(f"""
-    WITH aud AS (
-        SELECT DISTINCT cs.UNIQUE_ID
-        FROM `{PROJECT}.analytics.int_customer_category_spend` cs
-        WHERE cs.DESTINATION = '{CLICKS}'
-    )
-    SELECT t.PROVINCE AS prov, COUNT(DISTINCT t.UNIQUE_ID) AS n
-    FROM aud a JOIN `{PROJECT}.staging.stg_transactions` t ON a.UNIQUE_ID = t.UNIQUE_ID
-    WHERE t.PROVINCE IS NOT NULL AND t.EFF_DATE >= DATE_SUB(
-        (SELECT MAX(EFF_DATE) FROM `{PROJECT}.staging.stg_transactions`), INTERVAL 12 MONTH)
-    GROUP BY 1 ORDER BY n DESC LIMIT 6
-"""))
-for brand in brands:
-    brand['province'] = clicks_province
+print('\nBuilding HTML...')
 
 # ═══════════════════════════════════════════════════════════════
 # BUILD HTML
@@ -300,11 +274,7 @@ for b in brands:
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px">
                 <div><div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #f1f5f9">Where else they shop (categories)</div>{cat_html or '<div style="color:#94a3b8;font-size:11px">No data</div>'}</div>
-                <div><div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #f1f5f9">Where else they shop (merchants)</div>{merch_html or '<div style="color:#94a3b8;font-size:11px">No data</div>'}</div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px">
                 <div><div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #f1f5f9">Behavioural segments</div>{seg_html or '<div style="color:#94a3b8;font-size:11px">No data</div>'}</div>
-                <div><div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #f1f5f9">Geographic distribution</div>{prov_html or '<div style="color:#94a3b8;font-size:11px">No data</div>'}</div>
             </div>
 
             <div style="background:#f8fafc;border-radius:8px;padding:12px 16px;margin-top:12px">
