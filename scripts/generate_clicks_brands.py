@@ -194,33 +194,25 @@ for brand in brands:
         GROUP BY 1 ORDER BY n DESC
     """))
 
-    # Province
-    brand['province'] = recs(q(f"""
-        WITH aud AS (
-            SELECT DISTINCT cs.UNIQUE_ID
-            FROM `{PROJECT}.analytics.int_customer_category_spend` cs
-            JOIN `{PROJECT}.staging.stg_customers` c ON cs.UNIQUE_ID = c.UNIQUE_ID
-            WHERE cs.DESTINATION = '{CLICKS}' AND {brand['filter']}
-        )
-        SELECT g.PROVINCE AS prov, SUM(g.total_spend) AS spend
-        FROM aud a JOIN `{PROJECT}.marts.mart_geo_summary` g ON a.UNIQUE_ID = g.UNIQUE_ID
-        GROUP BY 1 ORDER BY spend DESC LIMIT 6
-    """))
-    # If geo_summary doesn't join on UNIQUE_ID, fall back
-    if not brand['province']:
-        brand['province'] = recs(q(f"""
-            WITH aud AS (
-                SELECT DISTINCT cs.UNIQUE_ID
-                FROM `{PROJECT}.analytics.int_customer_category_spend` cs
-                JOIN `{PROJECT}.staging.stg_customers` c ON cs.UNIQUE_ID = c.UNIQUE_ID
-                WHERE cs.DESTINATION = '{CLICKS}' AND {brand['filter']}
-            )
-            SELECT t.PROVINCE AS prov, COUNT(DISTINCT t.UNIQUE_ID) AS spend
-            FROM aud a JOIN `{PROJECT}.staging.stg_transactions` t ON a.UNIQUE_ID = t.UNIQUE_ID
-            WHERE t.PROVINCE IS NOT NULL AND t.EFF_DATE >= DATE_SUB(
-                (SELECT MAX(EFF_DATE) FROM `{PROJECT}.staging.stg_transactions`), INTERVAL 12 MONTH)
-            GROUP BY 1 ORDER BY spend DESC LIMIT 6
-        """))
+    # Province — skip per-brand (too expensive), use shared Clicks province data
+    brand['province'] = []
+
+# One province query for all Clicks shoppers (shared across brands)
+print('\nQuerying province (once for all brands)...')
+clicks_province = recs(q(f"""
+    WITH aud AS (
+        SELECT DISTINCT cs.UNIQUE_ID
+        FROM `{PROJECT}.analytics.int_customer_category_spend` cs
+        WHERE cs.DESTINATION = '{CLICKS}'
+    )
+    SELECT t.PROVINCE AS prov, COUNT(DISTINCT t.UNIQUE_ID) AS n
+    FROM aud a JOIN `{PROJECT}.staging.stg_transactions` t ON a.UNIQUE_ID = t.UNIQUE_ID
+    WHERE t.PROVINCE IS NOT NULL AND t.EFF_DATE >= DATE_SUB(
+        (SELECT MAX(EFF_DATE) FROM `{PROJECT}.staging.stg_transactions`), INTERVAL 12 MONTH)
+    GROUP BY 1 ORDER BY n DESC LIMIT 6
+"""))
+for brand in brands:
+    brand['province'] = clicks_province
 
 # ═══════════════════════════════════════════════════════════════
 # BUILD HTML
@@ -268,8 +260,8 @@ for b in brands:
 
     prov_html = ''
     if b['province']:
-        mx = b['province'][0]['spend']
-        prov_html = ''.join(bar(p['prov'], p['spend'], mx, num(p['spend']) if p['spend']<1e6 else fmt(p['spend']), '#64748b') for p in b['province'])
+        mx = b['province'][0]['n']
+        prov_html = ''.join(bar(p['prov'], p['n'], mx, num(p['n']), '#64748b') for p in b['province'])
 
     ch_colors = {'Meta':'#1877f2','Google':'#ea4335','TikTok':'#000','YouTube':'#ff0000','Instagram':'#E1306C'}
     ch_html = ''.join(f'<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;color:#fff;background:{ch_colors.get(c,"#475569")};margin-right:4px">{c}</span>' for c in b['channels'])
