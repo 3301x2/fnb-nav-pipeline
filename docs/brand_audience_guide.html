@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide: Building Brand Proxy Audiences from Transaction Data</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafbfc;color:#1a202c;line-height:1.8;padding:20px}
+.c{max-width:900px;margin:0 auto}
+h1{font-size:1.8rem;font-weight:700;color:#0f172a;margin:0 0 4px}
+h2{font-size:1.3rem;font-weight:700;color:#1e3a5f;margin:30px 0 8px;padding-top:16px;border-top:2px solid #e2e8f0}
+h3{font-size:1.05rem;font-weight:600;color:#0f172a;margin:20px 0 6px}
+p{margin:6px 0;font-size:.92rem;color:#374151}
+.sub{color:#64748b;font-size:.88rem;margin-bottom:24px}
+pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:16px 20px;margin:10px 0;overflow-x:auto;font-family:'Courier New',monospace;font-size:.82rem;line-height:1.6}
+code{font-family:'Courier New',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.84rem}
+.concept{background:#fff;border-radius:10px;padding:16px 20px;margin:12px 0;border:1px solid #f1f5f9}
+.concept h4{font-size:.95rem;font-weight:600;color:#0f172a;margin-bottom:6px}
+.concept p{font-size:.88rem;color:#475569}
+.why{border-left:3px solid #2563eb;background:#eff6ff;border-radius:0 8px 8px 0;padding:12px 16px;margin:10px 0;font-size:.88rem;color:#1e40af}
+.why::before{content:"WHY: ";font-weight:700}
+.warn{border-left:3px solid #f59e0b;background:#fffbeb;border-radius:0 8px 8px 0;padding:12px 16px;margin:10px 0;font-size:.88rem;color:#92400e}
+.warn::before{content:"WATCH OUT: ";font-weight:700}
+.try{border-left:3px solid #22c55e;background:#f0fdf4;border-radius:0 8px 8px 0;padding:12px 16px;margin:10px 0;font-size:.88rem;color:#166534}
+.try::before{content:"TRY THIS: ";font-weight:700}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:.85rem}
+th{background:#0f172a;color:#fff;padding:8px 10px;text-align:left;font-size:.78rem}
+td{padding:7px 10px;border-bottom:1px solid #f1f5f9}
+nav{position:sticky;top:0;background:#fff;padding:8px 0;border-bottom:1px solid #e2e8f0;z-index:10;margin-bottom:16px;overflow-x:auto;white-space:nowrap}
+nav a{display:inline-block;padding:4px 10px;margin:2px;border-radius:6px;text-decoration:none;color:#64748b;font-size:.8rem;font-weight:500}
+nav a:hover{background:#f1f5f9;color:#1e3a5f}
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#1e3a5f;color:#fff;font-size:.82rem;font-weight:700;margin-right:8px}
+</style>
+</head><body>
+<div class="c">
+
+<h1>Building brand proxy audiences from transaction data</h1>
+<p class="sub">A complete guide with SQL, reasoning, and exercises. Written for someone who knows basic SQL and wants to understand how we built the Clicks brand audiences (Revlon, Eucerin, Vital, Cantu).</p>
+
+<nav>
+<a href="#problem">The problem</a>
+<a href="#data">Our data</a>
+<a href="#approach">The approach</a>
+<a href="#discovery">Step 1: Discovery</a>
+<a href="#base">Step 2: Base audience</a>
+<a href="#filter">Step 3: Brand filters</a>
+<a href="#enrich">Step 4: Enrichment</a>
+<a href="#output">Step 5: Output</a>
+<a href="#exercises">Exercises</a>
+</nav>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="problem">The problem we're solving</h2>
+
+<p>A client (Webfluential) wants us to build targetable audiences for brands sold at Clicks:</p>
+<table>
+<tr><th>Brand</th><th>Product type</th><th>Target customer</th></tr>
+<tr><td><strong>Revlon</strong></td><td>Mass-market makeup</td><td>Young women, mid-income</td></tr>
+<tr><td><strong>Eucerin / La Roche-Posay</strong></td><td>Premium dermocosmetics</td><td>Women, higher income, 25-55</td></tr>
+<tr><td><strong>Vital</strong></td><td>Vitamins & supplements</td><td>Health-conscious, all genders, 30-60</td></tr>
+<tr><td><strong>Cantu</strong></td><td>Ethnic haircare</td><td>Women with textured hair, 18-45</td></tr>
+</table>
+
+<p>The problem: <strong>our data doesn't have brand or product information.</strong> We see that someone spent R350 at Clicks on 15 March. We do NOT see that they bought Revlon lipstick and Eucerin moisturiser.</p>
+
+<div class="concept">
+<h4>What we have vs what we don't</h4>
+<p><strong>We have:</strong> Which store they shopped at (DESTINATION), what category that store is in (CATEGORY_TWO), how much they spent, when they went, and their demographics (age, gender, estimated income).</p>
+<p><strong>We don't have:</strong> What specific products or brands they bought. No SKU data, no barcode data, no basket-level detail.</p>
+</div>
+
+<div class="why">We use a technique called <strong>demographic proxy segmentation</strong>. We can't identify Revlon buyers directly, so we identify the TYPE of person most likely to buy Revlon — then find all Clicks shoppers who match that type. The store is the starting point. Demographics are the filter.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="data">Understanding our data</h2>
+
+<p>Three tables matter for this exercise:</p>
+
+<div class="concept">
+<h4>1. int_customer_category_spend</h4>
+<p>One row per customer × destination. Shows how much each person spent at each store. This is our main table — it tells us WHO shops WHERE.</p>
+<p>Key columns: <code>UNIQUE_ID</code> (customer), <code>DESTINATION</code> (store name), <code>CATEGORY_TWO</code> (store category), <code>dest_spend</code> (how much they spent there)</p>
+</div>
+
+<div class="concept">
+<h4>2. stg_customers</h4>
+<p>One row per customer. Demographics. This tells us WHO each person is.</p>
+<p>Key columns: <code>UNIQUE_ID</code>, <code>age</code>, <code>gender_label</code> (Male/Female), <code>estimated_income</code>, <code>age_group</code> (18-25, 26-35, etc.), <code>income_group</code> (R0-R5.5k, R5.5k-R13.5k, etc.)</p>
+</div>
+
+<div class="concept">
+<h4>3. mart_cluster_output</h4>
+<p>One row per customer. Their ML-assigned behavioural segment (Champions, Loyal, Mid-Tier, At Risk, Dormant). This tells us HOW each person behaves.</p>
+<p>Key columns: <code>UNIQUE_ID</code>, <code>segment_name</code></p>
+</div>
+
+<div class="warn">Always check what values actually exist in the data before writing filters. Never assume. Run discovery queries first.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="approach">The approach (overview)</h2>
+
+<p>Five steps, each building on the previous one:</p>
+
+<table>
+<tr><th>Step</th><th>What</th><th>Why</th></tr>
+<tr><td>1. Discovery</td><td>Find the exact store name, categories, demographic values</td><td>So our filters match actual data, not what we assume</td></tr>
+<tr><td>2. Base audience</td><td>Count everyone who shops at Clicks</td><td>This is our universe — every possible buyer</td></tr>
+<tr><td>3. Brand filters</td><td>Filter by demographics matching each brand</td><td>Narrow to the most likely buyers for each brand</td></tr>
+<tr><td>4. Enrichment</td><td>Add behavioural data, co-shopping patterns</td><td>Turn a simple filter into a rich audience profile</td></tr>
+<tr><td>5. Output</td><td>Format as HTML report</td><td>Shareable deliverable for the client</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="discovery">Step 1: Discovery queries</h2>
+
+<p>Before writing a single audience query, you MUST know exactly what's in the data. Here's what we ran and why:</p>
+
+<h3><span class="step-num">1a</span>Find the exact store name</h3>
+
+<pre>SELECT DESTINATION, CATEGORY_TWO, customers,
+    ROUND(total_spend, 0) AS spend, spend_rank
+FROM `fmn-sandbox.marts.mart_destination_benchmarks`
+WHERE UPPER(DESTINATION) LIKE '%CLICK%'
+ORDER BY spend DESC LIMIT 10</pre>
+
+<div class="why">Store names in the data might not match what you expect. It could be "CLICKS", "Clicks", "CLICKS PHARMACY", or something else. This query finds the exact string so your filters work. We found it's called <code>CLICKS</code> in category <code>Pharmacies and Wellbeing</code>.</div>
+
+<h3><span class="step-num">1b</span>Find health/beauty categories</h3>
+
+<pre>SELECT DISTINCT CATEGORY_TWO
+FROM `fmn-sandbox.marts.mart_destination_benchmarks`
+WHERE UPPER(CATEGORY_TWO) LIKE '%HEALTH%'
+    OR UPPER(CATEGORY_TWO) LIKE '%PHARM%'
+    OR UPPER(CATEGORY_TWO) LIKE '%BEAUTY%'
+    OR UPPER(CATEGORY_TWO) LIKE '%CARE%'
+ORDER BY 1</pre>
+
+<div class="why">We need to know what related categories exist. Found: Childcare/Daycare, Gap Cover & Health Insurance, Health and Beauty, Healthcare Professionals, Nail and Beauty Salon, Pet Health Insurance, Pharmacies and Wellbeing. This tells us Clicks lives in "Pharmacies and Wellbeing" and there are other health/beauty categories we could use for enrichment later.</div>
+
+<h3><span class="step-num">1c</span>Find demographic values</h3>
+
+<pre>-- What gender values exist?
+SELECT gender_label, COUNT(*) AS n
+FROM `fmn-sandbox.staging.stg_customers`
+GROUP BY 1 ORDER BY 2 DESC
+
+-- What income groups exist?
+SELECT income_group, COUNT(*) AS n
+FROM `fmn-sandbox.staging.stg_customers`
+GROUP BY 1 ORDER BY 1
+
+-- What age groups exist?
+SELECT age_group, COUNT(*) AS n
+FROM `fmn-sandbox.staging.stg_customers`
+GROUP BY 1 ORDER BY 1</pre>
+
+<div class="why">You MUST use the exact values that exist in the data. If you filter for <code>income_group = 'R10k-R20k'</code> but the actual value is <code>'R13.5k-R23.5k'</code>, your query returns zero rows and you'll think nobody matches. Always discover first.</div>
+
+<p>What we found:</p>
+<table>
+<tr><th>Field</th><th>Values</th></tr>
+<tr><td>gender_label</td><td>Female, Male</td></tr>
+<tr><td>income_group</td><td>R0-R5.5k, R5.5k-R13.5k, R13.5k-R23.5k, R23.5k-R32.5k, R32.5k-R56k, R56k+, Unknown</td></tr>
+<tr><td>age_group</td><td>18-25, 26-35, 36-45, 46-60, 60+, Unknown</td></tr>
+</table>
+
+<h3><span class="step-num">1d</span>Count the Clicks base</h3>
+
+<pre>SELECT COUNT(DISTINCT UNIQUE_ID) AS clicks_shoppers
+FROM `fmn-sandbox.analytics.int_customer_category_spend`
+WHERE DESTINATION = 'CLICKS'</pre>
+
+<p>Result: <strong>2,554,110 people</strong> shop at Clicks. This is our universe.</p>
+
+<div class="try">Run all of these yourself in the BigQuery console. Change 'CLICKS' to 'DIS-CHEM' or 'PICK N PAY' and see what you get. Understanding the data shape is the most important skill.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="base">Step 2: Base audience profile</h2>
+
+<p>Before filtering for brands, understand the full Clicks shopper base:</p>
+
+<pre>SELECT
+    COUNT(DISTINCT cs.UNIQUE_ID) AS total_shoppers,
+    ROUND(SUM(cs.dest_spend), 0) AS total_spend,
+    ROUND(AVG(cs.dest_spend), 0) AS avg_spend,
+    ROUND(AVG(c.age), 1) AS avg_age,
+    ROUND(AVG(c.estimated_income), 0) AS avg_income,
+    ROUND(
+        COUNTIF(c.gender_label = 'Female') * 100.0
+        / NULLIF(COUNT(*), 0),
+    1) AS pct_female
+FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+JOIN `fmn-sandbox.staging.stg_customers` c
+    ON cs.UNIQUE_ID = c.UNIQUE_ID
+WHERE cs.DESTINATION = 'CLICKS'</pre>
+
+<div class="concept">
+<h4>What this query does, line by line</h4>
+<p><code>FROM int_customer_category_spend cs</code> — start with the spend table (who shops where)</p>
+<p><code>JOIN stg_customers c ON cs.UNIQUE_ID = c.UNIQUE_ID</code> — join demographics so we can see age/gender/income</p>
+<p><code>WHERE cs.DESTINATION = 'CLICKS'</code> — filter to only Clicks shoppers</p>
+<p><code>COUNT(DISTINCT cs.UNIQUE_ID)</code> — count unique people (not transactions)</p>
+<p><code>AVG(cs.dest_spend)</code> — average spend per person at Clicks</p>
+<p><code>COUNTIF(c.gender_label = 'Female') * 100.0 / NULLIF(COUNT(*), 0)</code> — percentage that are female. The NULLIF prevents division by zero.</p>
+</div>
+
+<div class="why">This gives you the baseline. If the average Clicks shopper is 40 years old and earns R17k, you know what "normal" looks like. Brand audiences will deviate from this baseline — Revlon skews younger and female, Vital skews older and mixed gender.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="filter">Step 3: Brand-specific demographic filters</h2>
+
+<p>This is the core technique. We take the same query from Step 2 and add demographic filters that match each brand's target market.</p>
+
+<h3><span class="step-num">3a</span>Revlon — mass-market makeup</h3>
+
+<p><strong>Logic:</strong> Revlon is affordable, widely available makeup. The typical buyer is female, younger (18-40), with mid-range income. Not ultra-premium, not budget-only.</p>
+
+<pre>SELECT
+    COUNT(DISTINCT cs.UNIQUE_ID) AS audience_size,
+    ROUND(AVG(c.age), 1) AS avg_age,
+    ROUND(AVG(c.estimated_income), 0) AS avg_income,
+    ROUND(
+        COUNTIF(c.gender_label = 'Female') * 100.0
+        / NULLIF(COUNT(*), 0),
+    1) AS pct_female,
+    ROUND(SUM(cs.dest_spend), 0) AS total_spend,
+    ROUND(AVG(cs.dest_spend), 0) AS avg_spend
+FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+JOIN `fmn-sandbox.staging.stg_customers` c
+    ON cs.UNIQUE_ID = c.UNIQUE_ID
+WHERE cs.DESTINATION = 'CLICKS'
+    AND c.gender_label = 'Female'
+    AND c.income_group IN (
+        'R5.5k-R13.5k',
+        'R13.5k-R23.5k',
+        'R23.5k-R32.5k'
+    )
+    AND c.age BETWEEN 18 AND 40</pre>
+
+<div class="concept">
+<h4>Why these specific filters?</h4>
+<p><code>gender_label = 'Female'</code> — Revlon is primarily a women's makeup brand</p>
+<p><code>income_group IN ('R5.5k-R13.5k', 'R13.5k-R23.5k', 'R23.5k-R32.5k')</code> — mid-income. We excluded R0-R5.5k (likely not regular cosmetics buyers) and R32.5k+ (more likely to buy premium brands like MAC or Clinique). These income groups come from discovery query 1c.</p>
+<p><code>age BETWEEN 18 AND 40</code> — Revlon's core demographic. Under 18 is excluded from our data anyway. Over 40 are more likely premium skincare buyers.</p>
+</div>
+
+<h3><span class="step-num">3b</span>Eucerin / La Roche-Posay — premium dermocosmetics</h3>
+
+<p><strong>Logic:</strong> These are doctor-recommended, expensive skincare products. The buyer is female, older, higher income.</p>
+
+<pre>WHERE cs.DESTINATION = 'CLICKS'
+    AND c.gender_label = 'Female'
+    AND c.income_group IN ('R32.5k-R56k', 'R56k+')
+    AND c.age BETWEEN 25 AND 55</pre>
+
+<div class="why">Higher income brackets because these products cost R200-R500 per item. Age 25-55 because skincare concerns (acne scarring, ageing, pigmentation) peak in this range. Still female-only because the brand primarily targets women.</div>
+
+<h3><span class="step-num">3c</span>Vital — vitamins & supplements</h3>
+
+<p><strong>Logic:</strong> Vitamins are bought by both genders. Health-conscious, established adults with disposable income for supplements.</p>
+
+<pre>WHERE cs.DESTINATION = 'CLICKS'
+    AND c.income_group NOT IN ('R0-R5.5k', 'Unknown')
+    AND c.age BETWEEN 30 AND 60</pre>
+
+<div class="why">No gender filter — men and women buy vitamins equally. We excluded the lowest income bracket (supplements are discretionary spending) and Unknown. Age 30-60 because younger people rarely buy vitamins regularly, and 60+ may already be on prescription medication.</div>
+
+<h3><span class="step-num">3d</span>Cantu — ethnic haircare</h3>
+
+<p><strong>Logic:</strong> Cantu is affordable ethnic/textured haircare. The buyer is female, broad age range, all income levels.</p>
+
+<pre>WHERE cs.DESTINATION = 'CLICKS'
+    AND c.gender_label = 'Female'
+    AND c.age BETWEEN 18 AND 45</pre>
+
+<div class="why">Female because Cantu primarily targets women's hair. No income filter because Cantu is affordable (R80-R150 per product) and used across all income levels. Age 18-45 covers students through young professionals who are active in natural hair care.</div>
+
+<div class="warn">These filters are informed opinions, not scientific truth. A 50-year-old man could buy Revlon for his daughter. The filters define the MOST LIKELY buyers, not the only buyers. That's why it's called a proxy audience — it's an approximation.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="enrich">Step 4: Enrichment queries</h2>
+
+<p>A demographic filter alone gives you a number ("480K people"). Enrichment turns it into a profile ("480K young women who also shop at Woolworths, are in the Mid-Tier segment, and 65% are in Gauteng"). This is what makes the audience useful for campaign planning.</p>
+
+<h3><span class="step-num">4a</span>Age breakdown</h3>
+
+<pre>SELECT c.age_group, COUNT(DISTINCT cs.UNIQUE_ID) AS n
+FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+JOIN `fmn-sandbox.staging.stg_customers` c
+    ON cs.UNIQUE_ID = c.UNIQUE_ID
+WHERE cs.DESTINATION = 'CLICKS'
+    AND c.gender_label = 'Female'
+    AND c.income_group IN (
+        'R5.5k-R13.5k', 'R13.5k-R23.5k', 'R23.5k-R32.5k'
+    )
+    AND c.age BETWEEN 18 AND 40
+    AND c.age_group IS NOT NULL
+    AND c.age_group != 'Unknown'
+GROUP BY 1
+ORDER BY 1</pre>
+
+<div class="why">Shows the age distribution WITHIN the audience. Even though we filtered 18-40, we want to see: are they mostly 18-25 or mostly 36-45? This matters for creative — you'd use different ad imagery for a 20-year-old vs a 38-year-old.</div>
+
+<h3><span class="step-num">4b</span>Income breakdown</h3>
+
+<pre>-- Same structure, swap age_group for income_group
+SELECT c.income_group, COUNT(DISTINCT cs.UNIQUE_ID) AS n
+FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+JOIN `fmn-sandbox.staging.stg_customers` c
+    ON cs.UNIQUE_ID = c.UNIQUE_ID
+WHERE cs.DESTINATION = 'CLICKS'
+    AND c.gender_label = 'Female'
+    AND c.income_group IN (
+        'R5.5k-R13.5k', 'R13.5k-R23.5k', 'R23.5k-R32.5k'
+    )
+    AND c.age BETWEEN 18 AND 40
+    AND c.income_group IS NOT NULL
+    AND c.income_group != 'Unknown'
+GROUP BY 1
+ORDER BY 1</pre>
+
+<h3><span class="step-num">4c</span>Top co-shopped categories (where else they spend)</h3>
+
+<p>This is a two-step query using a CTE (Common Table Expression):</p>
+
+<pre>WITH audience AS (
+    -- Step 1: Find all UNIQUE_IDs that match our brand filter
+    SELECT DISTINCT cs.UNIQUE_ID
+    FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+    JOIN `fmn-sandbox.staging.stg_customers` c
+        ON cs.UNIQUE_ID = c.UNIQUE_ID
+    WHERE cs.DESTINATION = 'CLICKS'
+        AND c.gender_label = 'Female'
+        AND c.income_group IN (
+            'R5.5k-R13.5k', 'R13.5k-R23.5k', 'R23.5k-R32.5k'
+        )
+        AND c.age BETWEEN 18 AND 40
+)
+-- Step 2: For those people, what ELSE do they buy?
+SELECT
+    cs2.CATEGORY_TWO AS category,
+    COUNT(DISTINCT cs2.UNIQUE_ID) AS customers,
+    ROUND(SUM(cs2.dest_spend), 0) AS spend
+FROM audience a
+JOIN `fmn-sandbox.analytics.int_customer_category_spend` cs2
+    ON a.UNIQUE_ID = cs2.UNIQUE_ID
+WHERE cs2.DESTINATION != 'CLICKS'  -- exclude Clicks itself
+GROUP BY 1
+ORDER BY spend DESC
+LIMIT 8</pre>
+
+<div class="concept">
+<h4>How the CTE works</h4>
+<p><code>WITH audience AS (...)</code> — this creates a temporary table called "audience" containing just the UNIQUE_IDs that match our Revlon filter. Think of it as a saved list of people.</p>
+<p>The main query then joins this list back to <code>int_customer_category_spend</code> to find what OTHER stores/categories these same people shop at. The <code>WHERE cs2.DESTINATION != 'CLICKS'</code> excludes Clicks itself — we already know they shop there.</p>
+</div>
+
+<div class="why">This tells the advertiser: "Your Revlon audience also spends heavily on Groceries (R4.2B), Clothing (R1.8B), and Fuel (R1.1B)." This is useful for campaign planning — if they also watch content about food and fashion, that's where to place your ads.</div>
+
+<h3><span class="step-num">4d</span>Behavioural segments</h3>
+
+<pre>WITH audience AS (
+    SELECT DISTINCT cs.UNIQUE_ID
+    FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+    JOIN `fmn-sandbox.staging.stg_customers` c
+        ON cs.UNIQUE_ID = c.UNIQUE_ID
+    WHERE cs.DESTINATION = 'CLICKS'
+        AND c.gender_label = 'Female'
+        AND c.income_group IN (
+            'R5.5k-R13.5k', 'R13.5k-R23.5k', 'R23.5k-R32.5k'
+        )
+        AND c.age BETWEEN 18 AND 40
+)
+SELECT co.segment_name, COUNT(*) AS n
+FROM audience a
+JOIN `fmn-sandbox.marts.mart_cluster_output` co
+    ON a.UNIQUE_ID = co.UNIQUE_ID
+GROUP BY 1
+ORDER BY n DESC</pre>
+
+<div class="why">This shows what proportion of the audience are Champions (high value), Mid-Tier (growth opportunity), or At Risk (might need retention). If 40% are Champions, it's a premium audience despite being "mid-income." If 60% are Dormant, the audience has lower engagement and you might reconsider the targeting.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="output">Step 5: Putting it together</h2>
+
+<p>The Python script <code>generate_clicks_brands.py</code> runs all these queries automatically for each brand, collects the results, and generates an HTML report. The structure is:</p>
+
+<pre>for each brand:
+    1. Run demographics query (size, avg age, income, gender)
+    2. Run age breakdown query
+    3. Run income breakdown query
+    4. Run co-shopping categories query
+    5. Run segment breakdown query
+    6. Format results into an HTML card</pre>
+
+<p>The HTML card shows: audience size, key stats (avg spend, age, income, % female), activation channels (Meta/Google/TikTok), demographic breakdowns as bar charts, co-shopping categories, behavioural segments, and recommended campaign use cases.</p>
+
+<div class="concept">
+<h4>Why we use Python instead of just SQL</h4>
+<p>SQL gives you the data. Python formats it into a presentable report. The SQL results are tables of numbers — the Python script turns them into a visual HTML page with bar charts, color-coded cards, and formatted numbers. You could do the SQL in BigQuery console and manually format — the script just automates it so you can regenerate in 30 seconds when data changes.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>The full pattern</h2>
+
+<p>Every brand audience follows the same template. Only the WHERE clause changes:</p>
+
+<pre>-- Template: change the filter for each brand
+SELECT COUNT(DISTINCT cs.UNIQUE_ID) AS audience_size,
+    ROUND(AVG(c.age), 1) AS avg_age,
+    ROUND(AVG(c.estimated_income), 0) AS avg_income,
+    ROUND(
+        COUNTIF(c.gender_label = 'Female') * 100.0
+        / NULLIF(COUNT(*), 0),
+    1) AS pct_female,
+    ROUND(SUM(cs.dest_spend), 0) AS total_spend,
+    ROUND(AVG(cs.dest_spend), 0) AS avg_spend
+FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+JOIN `fmn-sandbox.staging.stg_customers` c
+    ON cs.UNIQUE_ID = c.UNIQUE_ID
+WHERE cs.DESTINATION = '[STORE_NAME]'
+    AND [BRAND_SPECIFIC_FILTERS]</pre>
+
+<p>The enrichment queries all follow the same CTE pattern — define the audience, then join to another table to see what else they do.</p>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>Key SQL techniques used</h2>
+
+<table>
+<tr><th>Technique</th><th>What it does</th><th>Example</th></tr>
+<tr><td><code>COUNT(DISTINCT x)</code></td><td>Counts unique values, not duplicates</td><td>A person shopping 10 times counts as 1</td></tr>
+<tr><td><code>COUNTIF(condition)</code></td><td>Counts rows matching a condition</td><td><code>COUNTIF(gender='Female')</code> counts women</td></tr>
+<tr><td><code>NULLIF(x, 0)</code></td><td>Prevents division by zero</td><td><code>100.0 / NULLIF(COUNT(*), 0)</code></td></tr>
+<tr><td><code>WITH ... AS</code></td><td>Creates a temporary named result</td><td>CTE to define audience, then reuse it</td></tr>
+<tr><td><code>ROUND(x, n)</code></td><td>Rounds to n decimal places</td><td><code>ROUND(AVG(age), 1)</code> gives 34.2</td></tr>
+<tr><td><code>IN ('a', 'b')</code></td><td>Matches any value in a list</td><td>Better than multiple OR conditions</td></tr>
+<tr><td><code>BETWEEN x AND y</code></td><td>Range filter inclusive</td><td><code>age BETWEEN 18 AND 40</code></td></tr>
+<tr><td><code>NOT IN ('a', 'b')</code></td><td>Excludes specific values</td><td>Used for Vital to exclude lowest income</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="exercises">Exercises — practice this yourself</h2>
+
+<div class="try"><strong>Exercise 1: Dis-Chem base audience.</strong> Run the discovery queries but for Dis-Chem instead of Clicks. What's the exact destination name? How many shoppers? What's the gender split? Compare to Clicks.</div>
+
+<div class="try"><strong>Exercise 2: Build a Nike audience.</strong> Nike is sold at sports/clothing stores. Find the right destination name, pick demographic filters for a Nike buyer (hint: consider gender, age, and what kind of income group buys premium sportswear). Run the audience size query.</div>
+
+<div class="try"><strong>Exercise 3: Modify the Cantu filter.</strong> The current Cantu audience has no income filter. What happens to the audience size if you exclude the lowest income bracket (R0-R5.5k)? Does the average spend per customer go up? Should we exclude them?</div>
+
+<div class="try"><strong>Exercise 4: Co-shopping overlap.</strong> Using the CTE pattern from Step 4c, find out: what percentage of Revlon audience members also appear in the Cantu audience? (Hint: create two CTEs, one for each audience, then count the intersection.)</div>
+
+<div class="try"><strong>Exercise 5: Build a Woolworths Food audience.</strong> Woolworths Food is premium grocery. Define the target demographic (hint: think about who buys organic, premium groceries). Write the filters. Run it. How does the audience size compare to Clicks?</div>
+
+<div class="try"><strong>Exercise 6: Seasonal twist.</strong> Using <code>stg_transactions</code>, find Clicks shoppers who spend 1.5x their monthly average in December. These are "Festive Gift Buyers" — a seasonal audience for holiday campaigns. (Warning: this query scans the big transaction table. Add a date filter to only look at the last 14 months.)</div>
+
+<div class="warn">For exercises 4-6, check with Prosper before running expensive queries. Anything that touches <code>stg_transactions</code> scans billions of rows and costs money. Queries on <code>int_customer_category_spend</code> and <code>stg_customers</code> are cheap.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>Checklist: building any brand audience</h2>
+
+<table>
+<tr><th>Step</th><th>Query</th><th>Done?</th></tr>
+<tr><td>1. Find exact store name</td><td><code>WHERE UPPER(DESTINATION) LIKE '%...%'</code></td><td>☐</td></tr>
+<tr><td>2. Check demographic values</td><td><code>SELECT DISTINCT income_group...</code></td><td>☐</td></tr>
+<tr><td>3. Count base shoppers</td><td><code>COUNT(DISTINCT UNIQUE_ID) WHERE DESTINATION = '...'</code></td><td>☐</td></tr>
+<tr><td>4. Define brand filters</td><td>Gender + income + age based on brand target</td><td>☐</td></tr>
+<tr><td>5. Run audience size query</td><td>Base query + brand filters</td><td>☐</td></tr>
+<tr><td>6. Run age breakdown</td><td><code>GROUP BY age_group</code></td><td>☐</td></tr>
+<tr><td>7. Run income breakdown</td><td><code>GROUP BY income_group</code></td><td>☐</td></tr>
+<tr><td>8. Run co-shopping categories</td><td>CTE + join to int_customer_category_spend</td><td>☐</td></tr>
+<tr><td>9. Run segment breakdown</td><td>CTE + join to mart_cluster_output</td><td>☐</td></tr>
+<tr><td>10. Sanity check</td><td>Does the audience size make sense? Is avg age reasonable?</td><td>☐</td></tr>
+</table>
+
+<p style="margin-top:30px;color:#94a3b8;font-size:.82rem;text-align:center">Written for the Data & Media Network team · March 2026</p>
+
+</div>
+</body></html>
