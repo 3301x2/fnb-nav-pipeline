@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NAV Pipeline — Data Guide</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafbfc;color:#1a202c;line-height:1.8;padding:20px}
+.c{max-width:920px;margin:0 auto}
+h1{font-size:1.7rem;font-weight:700;color:#0f172a;margin:0 0 4px}
+h2{font-size:1.25rem;font-weight:700;color:#1e3a5f;margin:32px 0 10px;padding-top:18px;border-top:2px solid #e2e8f0}
+h3{font-size:1rem;font-weight:600;color:#0f172a;margin:20px 0 6px}
+p{margin:6px 0;font-size:.91rem;color:#374151}
+.sub{color:#64748b;font-size:.88rem;margin-bottom:24px}
+pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:14px 18px;margin:10px 0;overflow-x:auto;font-family:'Courier New',monospace;font-size:.8rem;line-height:1.6}
+.sql{border-left:3px solid #2563eb}
+.py{border-left:3px solid #f59e0b}
+code{font-family:'Courier New',monospace;background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:.84rem}
+.note{background:#eff6ff;border-left:3px solid #2563eb;border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0;font-size:.88rem;color:#1e40af}
+.warn{background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0;font-size:.88rem;color:#92400e}
+.bq{background:#fef2f2;border-left:3px solid #ef4444;border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0;font-size:.88rem;color:#991b1b}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:.84rem}
+th{background:#0f172a;color:#fff;padding:7px 10px;text-align:left;font-size:.78rem}
+td{padding:6px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+td code{font-size:.78rem}
+nav{position:sticky;top:0;background:#fff;padding:8px 0;border-bottom:1px solid #e2e8f0;z-index:10;margin-bottom:16px;overflow-x:auto;white-space:nowrap}
+nav a{display:inline-block;padding:3px 9px;margin:2px;border-radius:5px;text-decoration:none;color:#64748b;font-size:.78rem;font-weight:500}
+nav a:hover{background:#f1f5f9;color:#1e3a5f}
+.tag{display:inline-block;font-size:.7rem;padding:1px 6px;border-radius:3px;font-weight:600;margin-left:4px}
+.tag-s{background:#dbeafe;color:#1e40af}
+.tag-a{background:#dcfce7;color:#166534}
+.tag-m{background:#fef3c7;color:#92400e}
+</style>
+</head><body>
+<div class="c">
+
+<h1>NAV Analytics Pipeline — data guide</h1>
+<p class="sub">Architecture, every table, working SQL and Python. All queries tested against BigQuery — no MEDIAN(), no reserved-word collisions, no CDN dependencies.</p>
+
+<nav>
+<a href="#arch">Architecture</a>
+<a href="#staging">Staging</a>
+<a href="#analytics">Analytics</a>
+<a href="#marts">Marts</a>
+<a href="#ml">ML models</a>
+<a href="#audiences">Audiences</a>
+<a href="#python">Python</a>
+<a href="#gotchas">BQ gotchas</a>
+<a href="#cost">Cost</a>
+</nav>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="arch">Architecture</h2>
+
+<p>Three layers, each feeding the next. Source data never gets modified.</p>
+
+<table>
+<tr><th>Layer</th><th>Dataset</th><th>Purpose</th><th>Tables</th></tr>
+<tr><td><strong>Source</strong></td><td><code>customer_spend</code></td><td>Raw FNB transaction data (read-only)</td><td><code>transaction_data</code> (2.2B rows), <code>base_data</code> (82M rows)</td></tr>
+<tr><td><strong>Staging</strong> <span class="tag tag-s">staging</span></td><td><code>staging</code></td><td>Cleaned, typed, deduplicated</td><td><code>stg_transactions</code>, <code>stg_customers</code></td></tr>
+<tr><td><strong>Analytics</strong> <span class="tag tag-a">analytics</span></td><td><code>analytics</code></td><td>Feature engineering, intermediate aggregations</td><td><code>int_customer_category_spend</code>, <code>int_rfm_features</code></td></tr>
+<tr><td><strong>Marts</strong> <span class="tag tag-m">marts</span></td><td><code>marts</code></td><td>Business-ready tables for dashboards and reports</td><td>15+ tables (see below)</td></tr>
+</table>
+
+<p>The pipeline runs via <code>bash scripts/run.sh sandbox [step]</code> where steps 0-6 build each layer sequentially. All SQL is in <code>sql/</code> organised by layer.</p>
+
+<pre class="sql">-- See what's in each dataset
+SELECT table_name, row_count, ROUND(size_bytes/1e9, 2) AS gb
+FROM `fmn-sandbox.staging.__TABLES__`
+ORDER BY row_count DESC</pre>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="staging">Staging layer</h2>
+
+<h3>stg_transactions <span class="tag tag-s">staging</span></h3>
+<p>One row per card swipe. 2.24 billion rows. Partitioned by month for cost control.</p>
+
+<table>
+<tr><th>Column</th><th>Type</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>STRING</td><td>Anonymised customer identifier</td></tr>
+<tr><td><code>EFF_DATE</code></td><td>DATE</td><td>Transaction date</td></tr>
+<tr><td><code>trns_amt</code></td><td>FLOAT64</td><td>Transaction amount (Rands)</td></tr>
+<tr><td><code>DESTINATION</code></td><td>STRING</td><td>Merchant name (e.g. WOOLWORTHS, CLICKS)</td></tr>
+<tr><td><code>CATEGORY_TWO</code></td><td>STRING</td><td>Merchant category (e.g. Groceries, Pharmacies and Wellbeing)</td></tr>
+<tr><td><code>PROVINCE</code></td><td>STRING</td><td>Transaction province</td></tr>
+<tr><td><code>trns_hour</code></td><td>INT64</td><td>Hour of transaction (0-23)</td></tr>
+<tr><td><code>trns_dow</code></td><td>INT64</td><td>Day of week (1=Sunday, 7=Saturday)</td></tr>
+</table>
+
+<div class="bq"><strong>Cost warning:</strong> Any query that scans <code>stg_transactions</code> without a date filter costs ~R350. Always filter with <code>WHERE EFF_DATE >= DATE_SUB((...), INTERVAL 12 MONTH)</code>.</div>
+
+<pre class="sql">-- Safe query: recent 12 months, grouped
+SELECT DESTINATION, ROUND(SUM(trns_amt), 0) AS spend, COUNT(*) AS txns
+FROM `fmn-sandbox.staging.stg_transactions`
+WHERE EFF_DATE >= DATE_SUB(
+    (SELECT MAX(EFF_DATE) FROM `fmn-sandbox.staging.stg_transactions`),
+    INTERVAL 12 MONTH)
+GROUP BY 1
+ORDER BY spend DESC
+LIMIT 20</pre>
+
+<h3>stg_customers <span class="tag tag-s">staging</span></h3>
+<p>One row per customer. 7.26 million rows. Demographics from FNB's records.</p>
+
+<table>
+<tr><th>Column</th><th>Type</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>STRING</td><td>Joins to stg_transactions and all downstream tables</td></tr>
+<tr><td><code>age</code></td><td>INT64</td><td>Customer age (numeric)</td></tr>
+<tr><td><code>age_group</code></td><td>STRING</td><td>Bracketed: 18-25, 26-35, 36-45, 46-60, 60+</td></tr>
+<tr><td><code>gender</code></td><td>STRING</td><td>Raw gender code</td></tr>
+<tr><td><code>gender_label</code></td><td>STRING</td><td>Clean: Female, Male</td></tr>
+<tr><td><code>estimated_income</code></td><td>FLOAT64</td><td>FNB's modelled monthly income (Rands)</td></tr>
+<tr><td><code>income_group</code></td><td>STRING</td><td>Bracketed: R0-R5.5k, R5.5k-R13.5k, R13.5k-R23.5k, R23.5k-R32.5k, R32.5k-R56k, R56k+, Unknown</td></tr>
+<tr><td><code>income_segment</code></td><td>STRING</td><td>FNB's income classification</td></tr>
+<tr><td><code>main_banked</code></td><td>STRING</td><td>Primary banking flag</td></tr>
+<tr><td><code>credit_risk_class</code></td><td>STRING</td><td>FNB credit risk tier</td></tr>
+</table>
+
+<pre class="sql">-- Quick demographic profile
+SELECT
+    gender_label,
+    age_group,
+    income_group,
+    COUNT(*) AS n,
+    ROUND(AVG(estimated_income), 0) AS avg_income
+FROM `fmn-sandbox.staging.stg_customers`
+WHERE gender_label IS NOT NULL
+    AND age_group IS NOT NULL
+    AND age_group != 'Unknown'
+GROUP BY 1, 2, 3
+ORDER BY 1, 2, 3</pre>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="analytics">Analytics layer</h2>
+
+<h3>int_customer_category_spend <span class="tag tag-a">analytics</span></h3>
+<p>One row per customer × destination. Pre-aggregated spend. This is the workhorse — most mart tables read from here instead of scanning raw transactions.</p>
+
+<table>
+<tr><th>Column</th><th>Type</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>STRING</td><td>Customer</td></tr>
+<tr><td><code>DESTINATION</code></td><td>STRING</td><td>Merchant</td></tr>
+<tr><td><code>CATEGORY_TWO</code></td><td>STRING</td><td>Merchant category</td></tr>
+<tr><td><code>dest_spend</code></td><td>FLOAT64</td><td>Total spend at this destination</td></tr>
+<tr><td><code>dest_txns</code></td><td>INT64</td><td>Transaction count at this destination</td></tr>
+<tr><td><code>share_of_wallet_pct</code></td><td>FLOAT64</td><td>This destination's share of the customer's total category spend</td></tr>
+</table>
+
+<div class="note"><strong>This table is cheap to query</strong> (~212M rows, but that's 30x smaller than raw transactions). Use it instead of <code>stg_transactions</code> whenever possible.</div>
+
+<pre class="sql">-- Who shops at Clicks, ranked by spend?
+SELECT UNIQUE_ID, dest_spend, share_of_wallet_pct
+FROM `fmn-sandbox.analytics.int_customer_category_spend`
+WHERE DESTINATION = 'CLICKS'
+ORDER BY dest_spend DESC
+LIMIT 100</pre>
+
+<h3>int_rfm_features <span class="tag tag-a">analytics</span></h3>
+<p>One row per customer. RFM features used as input to the ML clustering model.</p>
+
+<table>
+<tr><th>Column</th><th>Type</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>STRING</td><td>Customer</td></tr>
+<tr><td><code>recency_days</code></td><td>INT64</td><td>Days since last transaction</td></tr>
+<tr><td><code>total_spend</code></td><td>FLOAT64</td><td>Total spend (12 months)</td></tr>
+<tr><td><code>total_txns</code></td><td>INT64</td><td>Total transactions</td></tr>
+<tr><td><code>active_months</code></td><td>INT64</td><td>Months with at least one transaction</td></tr>
+<tr><td><code>distinct_merchants</code></td><td>INT64</td><td>Unique merchants visited</td></tr>
+<tr><td><code>distinct_categories</code></td><td>INT64</td><td>Unique categories shopped</td></tr>
+<tr><td><code>pct_weekend</code></td><td>FLOAT64</td><td>% of transactions on weekends</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="marts">Mart tables</h2>
+
+<p>Business-ready aggregations. These feed dashboards and reports. All in the <code>marts</code> dataset.</p>
+
+<h3>mart_destination_benchmarks</h3>
+<p>One row per destination × category. The core competitive intelligence table.</p>
+
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>DESTINATION</code>, <code>CATEGORY_TWO</code></td><td>Store and its category</td></tr>
+<tr><td><code>customers</code></td><td>Unique shoppers at this store</td></tr>
+<tr><td><code>total_spend</code></td><td>Total card spend</td></tr>
+<tr><td><code>transactions</code></td><td>Total swipe count</td></tr>
+<tr><td><code>market_share_pct</code></td><td>Store's % of total category spend</td></tr>
+<tr><td><code>penetration_pct</code></td><td>% of category shoppers who visit this store</td></tr>
+<tr><td><code>avg_txn_value</code></td><td>Average basket size</td></tr>
+<tr><td><code>spend_per_customer</code></td><td>Annual spend per customer</td></tr>
+<tr><td><code>avg_share_of_wallet</code></td><td>Mean share of wallet across customers</td></tr>
+<tr><td><code>spend_rank</code></td><td>Rank within category by total spend</td></tr>
+</table>
+
+<pre class="sql">-- Top 10 grocery players
+SELECT DESTINATION, customers, ROUND(total_spend / 1e9, 1) AS spend_bn,
+    ROUND(market_share_pct, 1) AS share, spend_rank
+FROM `fmn-sandbox.marts.mart_destination_benchmarks`
+WHERE CATEGORY_TWO = 'Groceries'
+ORDER BY spend_rank
+LIMIT 10</pre>
+
+<pre class="sql">-- Compare two competitors
+SELECT DESTINATION,
+    customers, ROUND(total_spend / 1e9, 1) AS spend_bn,
+    ROUND(market_share_pct, 1) AS share,
+    ROUND(avg_txn_value, 0) AS avg_basket,
+    ROUND(spend_per_customer, 0) AS annual_per_cust,
+    ROUND(avg_share_of_wallet, 1) AS sow
+FROM `fmn-sandbox.marts.mart_destination_benchmarks`
+WHERE DESTINATION IN ('WOOLWORTHS', 'PICK N PAY')
+    AND CATEGORY_TWO = 'Groceries'</pre>
+
+<h3>mart_cluster_output</h3>
+<p>One row per customer. Their ML-assigned behavioural segment.</p>
+
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>Customer</td></tr>
+<tr><td><code>segment_name</code></td><td>Champions, Loyal High Value, Steady Mid-Tier, At Risk, Dormant</td></tr>
+<tr><td><code>centroid_id</code></td><td>Raw cluster number from k-means</td></tr>
+</table>
+
+<pre class="sql">-- Segment sizes and spend
+SELECT co.segment_name,
+    COUNT(*) AS customers,
+    ROUND(AVG(r.total_spend), 0) AS avg_spend,
+    ROUND(AVG(r.recency_days), 0) AS avg_recency,
+    ROUND(AVG(r.distinct_merchants), 0) AS avg_merchants
+FROM `fmn-sandbox.marts.mart_cluster_output` co
+JOIN `fmn-sandbox.analytics.int_rfm_features` r ON co.UNIQUE_ID = r.UNIQUE_ID
+GROUP BY 1
+ORDER BY avg_spend DESC</pre>
+
+<h3>mart_churn_risk</h3>
+<p>One row per customer. Churn probability and risk level from the logistic regression model.</p>
+
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>Customer</td></tr>
+<tr><td><code>churn_probability</code></td><td>0 to 1 score</td></tr>
+<tr><td><code>churn_risk_level</code></td><td>Critical (&gt;0.8), High (0.6-0.8), Medium (0.4-0.6), Low (0.2-0.4), Stable (&lt;0.2)</td></tr>
+<tr><td><code>total_spend</code></td><td>Historical 12-month spend</td></tr>
+<tr><td><code>days_since_last</code></td><td>Recency in days</td></tr>
+</table>
+
+<pre class="sql">-- Spend at risk by churn level
+SELECT churn_risk_level,
+    COUNT(*) AS customers,
+    ROUND(SUM(total_spend) / 1e9, 1) AS spend_at_risk_bn,
+    ROUND(AVG(churn_probability), 2) AS avg_prob
+FROM `fmn-sandbox.marts.mart_churn_risk`
+GROUP BY 1
+ORDER BY avg_prob DESC</pre>
+
+<h3>mart_churn_explained</h3>
+<p>One row per customer. Why they're flagged as churn risk — the top contributing features.</p>
+
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>Customer</td></tr>
+<tr><td><code>reason_1</code>, <code>reason_2</code>, <code>reason_3</code></td><td>Top 3 churn drivers (e.g. "high recency", "declining frequency")</td></tr>
+</table>
+
+<h3>mart_customer_clv</h3>
+<p>One row per customer. Predicted future value from the linear regression model.</p>
+
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>UNIQUE_ID</code></td><td>Customer</td></tr>
+<tr><td><code>predicted_clv</code></td><td>Predicted 6-month future spend</td></tr>
+<tr><td><code>clv_tier</code></td><td>Platinum, Gold, Silver, Bronze, Basic</td></tr>
+<tr><td><code>historical_spend</code></td><td>12-month actual spend</td></tr>
+</table>
+
+<pre class="sql">-- Cross-reference: high-value customers at churn risk
+SELECT co.segment_name, cr.churn_risk_level, clv.clv_tier,
+    COUNT(*) AS customers,
+    ROUND(SUM(clv.predicted_clv) / 1e6, 1) AS predicted_value_m
+FROM `fmn-sandbox.marts.mart_cluster_output` co
+JOIN `fmn-sandbox.marts.mart_churn_risk` cr ON co.UNIQUE_ID = cr.UNIQUE_ID
+JOIN `fmn-sandbox.marts.mart_customer_clv` clv ON co.UNIQUE_ID = clv.UNIQUE_ID
+WHERE cr.churn_risk_level IN ('Critical', 'High')
+    AND clv.clv_tier IN ('Platinum', 'Gold')
+GROUP BY 1, 2, 3
+ORDER BY predicted_value_m DESC</pre>
+
+<div class="note">This is the "red alert" query. Platinum CLV + Critical churn = your most valuable customers about to leave. Action these first.</div>
+
+<h3>mart_category_scorecard</h3>
+<p>One row per category. Health indicators.</p>
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>CATEGORY_TWO</code></td><td>Category name</td></tr>
+<tr><td><code>total_customers</code>, <code>total_spend</code></td><td>Size metrics</td></tr>
+<tr><td><code>growth_pct</code></td><td>YoY spend growth</td></tr>
+<tr><td><code>avg_churn_pct</code></td><td>% of customers at churn risk</td></tr>
+<tr><td><code>health_status</code></td><td>Growing, Stable, Declining</td></tr>
+</table>
+
+<h3>mart_category_affinity</h3>
+<p>One row per category pair. Cross-shopping lift scores.</p>
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>category_a</code>, <code>category_b</code></td><td>The two categories</td></tr>
+<tr><td><code>shared_customers</code></td><td>People who shop in both</td></tr>
+<tr><td><code>lift</code></td><td>How much more likely than random (&gt;1 = positive association)</td></tr>
+</table>
+
+<pre class="sql">-- Strongest cross-sell pairs
+SELECT category_a, category_b,
+    shared_customers, ROUND(lift, 2) AS lift
+FROM `fmn-sandbox.marts.mart_category_affinity`
+WHERE lift > 2
+ORDER BY shared_customers DESC
+LIMIT 15</pre>
+
+<h3>mart_cohort_retention</h3>
+<p>Retention curve. One row per cohort month × months since first purchase.</p>
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>cohort_month</code></td><td>Month customer first appeared</td></tr>
+<tr><td><code>months_since_first</code></td><td>0, 1, 2, ... 12</td></tr>
+<tr><td><code>retention_pct</code></td><td>% still active at this point</td></tr>
+</table>
+
+<h3>mart_spend_momentum</h3>
+<p>One row per momentum status. Compares recent 6 months vs prior 6 months.</p>
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>momentum_status</code></td><td>Accelerating, Steady, Slowing, Declining</td></tr>
+<tr><td><code>total_spend_12m</code></td><td>Average 12-month spend for this group</td></tr>
+<tr><td><code>spend_change_pct</code></td><td>% change recent vs prior</td></tr>
+<tr><td><code>urgency_score</code></td><td>Composite: decline rate × spend level</td></tr>
+</table>
+
+<h3>mart_store_loyalty</h3>
+<p>One row per destination × category. How sticky are each store's customers?</p>
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>DESTINATION</code>, <code>CATEGORY_TWO</code></td><td>Store and category</td></tr>
+<tr><td><code>customers</code></td><td>Total shoppers</td></tr>
+<tr><td><code>avg_loyalty_pct</code></td><td>Mean share of wallet</td></tr>
+<tr><td><code>pct_loyal_50</code></td><td>% with 50%+ share of wallet</td></tr>
+<tr><td><code>pct_loyal_80</code></td><td>% with 80%+ share of wallet</td></tr>
+<tr><td><code>band_1_store</code> through <code>band_8_plus</code></td><td>How many stores customers visit</td></tr>
+</table>
+
+<h3>mart_store_time_patterns</h3>
+<p>One row per destination × category. When customers shop.</p>
+<table>
+<tr><th>Column</th><th>Description</th></tr>
+<tr><td><code>pct_early_morning</code> through <code>pct_evening</code></td><td>% of transactions in each time slot</td></tr>
+<tr><td><code>pct_weekend</code>, <code>pct_weekday</code></td><td>Weekend/weekday split</td></tr>
+<tr><td><code>pct_sunday</code> through <code>pct_saturday</code></td><td>Day-of-week distribution</td></tr>
+<tr><td><code>peak_hour</code>, <code>peak_day_number</code></td><td>Most common hour and day</td></tr>
+</table>
+
+<h3>mart_audience_catalog + mart_audience_members</h3>
+<p>The audience marketplace. Catalog has one row per audience (metadata). Members maps customers to audiences.</p>
+<table>
+<tr><th>Column (catalog)</th><th>Description</th></tr>
+<tr><td><code>audience_id</code></td><td>D01, L01, B01, etc.</td></tr>
+<tr><td><code>audience_name</code></td><td>Human-readable name</td></tr>
+<tr><td><code>audience_type</code></td><td>Demographic, Lifestyle, Behavioral, Seasonal, Geographic, Cross-category</td></tr>
+<tr><td><code>audience_size</code></td><td>Number of customers</td></tr>
+<tr><td><code>avg_spend</code>, <code>avg_age</code>, <code>avg_income</code>, <code>pct_female</code></td><td>Profile metrics</td></tr>
+<tr><td><code>description</code></td><td>Plain-English audience definition</td></tr>
+</table>
+
+<pre class="sql">-- Which audiences overlap most?
+SELECT a1.audience_name AS aud_1, a2.audience_name AS aud_2,
+    COUNT(*) AS overlap,
+    ROUND(COUNT(*) * 100.0 / LEAST(a1c.cnt, a2c.cnt), 1) AS overlap_pct
+FROM `fmn-sandbox.marts.mart_audience_members` m1
+JOIN `fmn-sandbox.marts.mart_audience_members` m2
+    ON m1.UNIQUE_ID = m2.UNIQUE_ID AND m1.audience_id < m2.audience_id
+JOIN `fmn-sandbox.marts.mart_audience_catalog` a1 ON m1.audience_id = a1.audience_id
+JOIN `fmn-sandbox.marts.mart_audience_catalog` a2 ON m2.audience_id = a2.audience_id
+JOIN (SELECT audience_id, COUNT(*) AS cnt FROM `fmn-sandbox.marts.mart_audience_members` GROUP BY 1) a1c ON a1c.audience_id = m1.audience_id
+JOIN (SELECT audience_id, COUNT(*) AS cnt FROM `fmn-sandbox.marts.mart_audience_members` GROUP BY 1) a2c ON a2c.audience_id = m2.audience_id
+GROUP BY 1, 2, a1c.cnt, a2c.cnt
+ORDER BY overlap DESC
+LIMIT 20</pre>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="ml">ML models</h2>
+
+<p>Three models, all built using BigQuery ML. The SQL that creates them is in <code>sql/03_ml/</code>.</p>
+
+<h3>K-means segmentation</h3>
+<pre class="sql">-- The model lives in BigQuery as a model object
+-- Predict segment for new customers:
+SELECT * FROM ML.PREDICT(
+    MODEL `fmn-sandbox.analytics.kmeans_customer_segments`,
+    (SELECT * FROM `fmn-sandbox.analytics.int_rfm_features` WHERE UNIQUE_ID = 'some_id')
+)</pre>
+<p>5 clusters, Davies-Bouldin score 1.295. Input: 9 normalised RFM features. Output: centroid_id mapped to segment names via the naming logic in <code>sql/04_marts/mart_cluster_output.sql</code>.</p>
+
+<h3>Churn prediction (logistic regression)</h3>
+<pre class="sql">-- Evaluate model performance
+SELECT * FROM ML.EVALUATE(
+    MODEL `fmn-sandbox.analytics.churn_logistic_model`
+)</pre>
+<p>83.1% accuracy, F1 0.556. Input: 15 features including recency, frequency, spend trends, merchant diversity change. Binary output: churned (1) or retained (0), with a probability score.</p>
+
+<h3>CLV prediction (linear regression)</h3>
+<p>Predicts 6-month future spend from 12-month historical features. Output: <code>predicted_clv</code>, tiered into Platinum through Basic.</p>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="audiences">Building custom audiences</h2>
+
+<p>The CTE pattern. Define who's in the audience, then profile them.</p>
+
+<pre class="sql">-- Template: any audience you want to build
+WITH my_audience AS (
+    SELECT DISTINCT cs.UNIQUE_ID
+    FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+    JOIN `fmn-sandbox.staging.stg_customers` c ON cs.UNIQUE_ID = c.UNIQUE_ID
+    WHERE cs.DESTINATION = 'CLICKS'       -- change store
+        AND c.gender_label = 'Female'     -- change demographics
+        AND c.age BETWEEN 18 AND 40       -- change demographics
+)
+-- Profile: size + demographics
+SELECT
+    COUNT(*) AS audience_size,
+    ROUND(AVG(c.age), 1) AS avg_age,
+    ROUND(AVG(c.estimated_income), 0) AS avg_income,
+    ROUND(COUNTIF(c.gender_label = 'Female') * 100.0
+        / NULLIF(COUNT(*), 0), 1) AS pct_female
+FROM my_audience a
+JOIN `fmn-sandbox.staging.stg_customers` c ON a.UNIQUE_ID = c.UNIQUE_ID</pre>
+
+<pre class="sql">-- Enrich: what segments are they in?
+WITH my_audience AS (
+    -- same CTE as above
+    SELECT DISTINCT cs.UNIQUE_ID
+    FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+    WHERE cs.DESTINATION = 'CLICKS'
+)
+SELECT co.segment_name, COUNT(*) AS n
+FROM my_audience a
+JOIN `fmn-sandbox.marts.mart_cluster_output` co ON a.UNIQUE_ID = co.UNIQUE_ID
+GROUP BY 1
+ORDER BY n DESC</pre>
+
+<pre class="sql">-- Enrich: what else do they buy?
+WITH my_audience AS (
+    SELECT DISTINCT cs.UNIQUE_ID
+    FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+    WHERE cs.DESTINATION = 'CLICKS'
+)
+SELECT cs2.CATEGORY_TWO, COUNT(DISTINCT cs2.UNIQUE_ID) AS customers,
+    ROUND(SUM(cs2.dest_spend), 0) AS spend
+FROM my_audience a
+JOIN `fmn-sandbox.analytics.int_customer_category_spend` cs2
+    ON a.UNIQUE_ID = cs2.UNIQUE_ID
+WHERE cs2.DESTINATION != 'CLICKS'
+GROUP BY 1
+ORDER BY spend DESC
+LIMIT 10</pre>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="python">Python / notebook patterns</h2>
+
+<p>All examples use <code>google-cloud-bigquery</code> with pandas. Works in Colab, Jupyter, or any notebook.</p>
+
+<pre class="py">from google.cloud import bigquery
+import pandas as pd
+
+PROJECT = 'fmn-sandbox'
+client = bigquery.Client(project=PROJECT, location='africa-south1')
+
+def bq(sql):
+    """Run a query and return a DataFrame."""
+    return client.query(sql).to_dataframe()
+</pre>
+
+<h3>Quick segment profile</h3>
+<pre class="py">segments = bq("""
+    SELECT co.segment_name,
+        COUNT(*) AS n,
+        ROUND(AVG(r.total_spend), 0) AS avg_spend,
+        ROUND(AVG(r.recency_days), 0) AS avg_recency,
+        ROUND(AVG(r.distinct_merchants), 0) AS avg_merchants
+    FROM `fmn-sandbox.marts.mart_cluster_output` co
+    JOIN `fmn-sandbox.analytics.int_rfm_features` r
+        ON co.UNIQUE_ID = r.UNIQUE_ID
+    GROUP BY 1
+    ORDER BY avg_spend DESC
+""")
+
+# Display with nice formatting
+segments.style.format({
+    'n': '{:,.0f}',
+    'avg_spend': 'R{:,.0f}',
+    'avg_recency': '{:.0f} days',
+    'avg_merchants': '{:.0f}'
+}).bar(subset=['avg_spend'], color='#2E75B6')</pre>
+
+<h3>Churn risk dashboard in a notebook</h3>
+<pre class="py">import matplotlib.pyplot as plt
+
+churn = bq("""
+    SELECT churn_risk_level,
+        COUNT(*) AS customers,
+        ROUND(SUM(total_spend) / 1e9, 1) AS spend_bn
+    FROM `fmn-sandbox.marts.mart_churn_risk`
+    GROUP BY 1
+    ORDER BY CASE churn_risk_level
+        WHEN 'Critical' THEN 1 WHEN 'High' THEN 2
+        WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4
+        ELSE 5 END
+""")
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+
+colors = {'Critical': '#dc2626', 'High': '#f97316', 'Medium': '#eab308',
+          'Low': '#22c55e', 'Stable': '#3b82f6'}
+
+ax1.barh(churn['churn_risk_level'], churn['customers'],
+         color=[colors.get(x, '#94a3b8') for x in churn['churn_risk_level']])
+ax1.set_title('Customers by churn risk')
+ax1.set_xlabel('Count')
+
+ax2.barh(churn['churn_risk_level'], churn['spend_bn'],
+         color=[colors.get(x, '#94a3b8') for x in churn['churn_risk_level']])
+ax2.set_title('Spend at risk (R billions)')
+ax2.set_xlabel('R bn')
+
+plt.tight_layout()
+plt.show()</pre>
+
+<h3>Audience builder function</h3>
+<pre class="py">def build_audience(destination, gender=None, age_min=None, age_max=None,
+                   income_groups=None, exclude_income=None):
+    """Build a proxy audience from transaction + demographic data.
+
+    Returns DataFrame with audience_size, avg_age, avg_income, pct_female.
+    """
+    filters = [f"cs.DESTINATION = '{destination}'"]
+    if gender:
+        filters.append(f"c.gender_label = '{gender}'")
+    if age_min is not None and age_max is not None:
+        filters.append(f"c.age BETWEEN {age_min} AND {age_max}")
+    if income_groups:
+        quoted = ', '.join(f"'{g}'" for g in income_groups)
+        filters.append(f"c.income_group IN ({quoted})")
+    if exclude_income:
+        quoted = ', '.join(f"'{g}'" for g in exclude_income)
+        filters.append(f"c.income_group NOT IN ({quoted})")
+
+    where = ' AND '.join(filters)
+
+    return bq(f"""
+        SELECT
+            COUNT(DISTINCT cs.UNIQUE_ID) AS audience_size,
+            ROUND(AVG(c.age), 1) AS avg_age,
+            ROUND(AVG(c.estimated_income), 0) AS avg_income,
+            ROUND(COUNTIF(c.gender_label = 'Female') * 100.0
+                / NULLIF(COUNT(*), 0), 1) AS pct_female,
+            ROUND(SUM(cs.dest_spend), 0) AS total_spend,
+            ROUND(AVG(cs.dest_spend), 0) AS avg_spend
+        FROM `fmn-sandbox.analytics.int_customer_category_spend` cs
+        JOIN `fmn-sandbox.staging.stg_customers` c
+            ON cs.UNIQUE_ID = c.UNIQUE_ID
+        WHERE {where}
+    """)
+
+# Usage
+revlon = build_audience('CLICKS', gender='Female', age_min=18, age_max=40,
+                        income_groups=['R5.5k-R13.5k', 'R13.5k-R23.5k', 'R23.5k-R32.5k'])
+print(revlon)
+
+eucerin = build_audience('CLICKS', gender='Female', age_min=25, age_max=55,
+                         income_groups=['R32.5k-R56k', 'R56k+'])
+print(eucerin)
+
+vital = build_audience('CLICKS', age_min=30, age_max=60,
+                       exclude_income=['R0-R5.5k', 'Unknown'])
+print(vital)</pre>
+
+<h3>Percentile analysis (BQ doesn't have MEDIAN)</h3>
+<pre class="py"># WRONG — this crashes in BigQuery:
+# SELECT MEDIAN(total_spend) FROM ...
+
+# RIGHT — use APPROX_QUANTILES:
+percentiles = bq("""
+    SELECT
+        APPROX_QUANTILES(total_spend, 4)[OFFSET(1)] AS q25,
+        APPROX_QUANTILES(total_spend, 4)[OFFSET(2)] AS median,
+        APPROX_QUANTILES(total_spend, 4)[OFFSET(3)] AS q75,
+        APPROX_QUANTILES(total_spend, 100)[OFFSET(90)] AS p90,
+        APPROX_QUANTILES(total_spend, 100)[OFFSET(99)] AS p99
+    FROM `fmn-sandbox.analytics.int_rfm_features`
+""")
+print(percentiles)</pre>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="gotchas">BigQuery gotchas</h2>
+
+<p>Things that work in PostgreSQL/MySQL but break in BigQuery.</p>
+
+<table>
+<tr><th>Gotcha</th><th>Wrong</th><th>Right</th></tr>
+<tr>
+<td><strong>No MEDIAN()</strong></td>
+<td><code>SELECT MEDIAN(spend)</code></td>
+<td><code>SELECT APPROX_QUANTILES(spend, 2)[OFFSET(1)]</code></td>
+</tr>
+<tr>
+<td><strong>ROWS is a keyword</strong></td>
+<td><code>SELECT rows FROM ...</code></td>
+<td><code>SELECT `rows` FROM ...</code> or rename the column</td>
+</tr>
+<tr>
+<td><strong>No ILIKE</strong></td>
+<td><code>WHERE name ILIKE '%click%'</code></td>
+<td><code>WHERE UPPER(name) LIKE '%CLICK%'</code></td>
+</tr>
+<tr>
+<td><strong>No LIMIT in subqueries</strong> (some contexts)</td>
+<td><code>FROM (SELECT ... LIMIT 10)</code></td>
+<td>Use a CTE instead: <code>WITH top10 AS (SELECT ... LIMIT 10)</code></td>
+</tr>
+<tr>
+<td><strong>Date arithmetic</strong></td>
+<td><code>date - 30</code></td>
+<td><code>DATE_SUB(date, INTERVAL 30 DAY)</code></td>
+</tr>
+<tr>
+<td><strong>Division by zero</strong></td>
+<td><code>a / b</code></td>
+<td><code>a / NULLIF(b, 0)</code> or <code>SAFE_DIVIDE(a, b)</code></td>
+</tr>
+<tr>
+<td><strong>String aggregation</strong></td>
+<td><code>GROUP_CONCAT(x)</code></td>
+<td><code>STRING_AGG(x, ', ')</code></td>
+</tr>
+<tr>
+<td><strong>Current date</strong></td>
+<td><code>NOW()</code></td>
+<td><code>CURRENT_DATE()</code> or <code>CURRENT_TIMESTAMP()</code></td>
+</tr>
+<tr>
+<td><strong>Type casting</strong></td>
+<td><code>CAST(x AS VARCHAR)</code></td>
+<td><code>CAST(x AS STRING)</code></td>
+</tr>
+<tr>
+<td><strong>Top N per group</strong></td>
+<td><code>LIMIT inside GROUP BY</code></td>
+<td><code>ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...) = 1</code></td>
+</tr>
+<tr>
+<td><strong>Approximate distinct count</strong></td>
+<td><code>COUNT(DISTINCT x)</code> on huge data</td>
+<td><code>APPROX_COUNT_DISTINCT(x)</code> — faster, ~1% error, much cheaper</td>
+</tr>
+</table>
+
+<div class="bq"><strong>Cost control:</strong> Always check estimated bytes before running. In the BQ console, click the green checkmark (dry run) to see "This query will process X GB" before executing. On <code>stg_transactions</code>, add a date filter to avoid scanning the full 2.2B rows.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="cost">Cost reference</h2>
+
+<table>
+<tr><th>Action</th><th>Approximate cost</th></tr>
+<tr><td>Full pipeline rebuild (run.sh 0-6)</td><td>~R700</td></tr>
+<tr><td>Query <code>stg_transactions</code> (full scan, no date filter)</td><td>~R350</td></tr>
+<tr><td>Query <code>stg_transactions</code> (12-month filter)</td><td>~R30</td></tr>
+<tr><td>Query <code>int_customer_category_spend</code></td><td>~R5-10</td></tr>
+<tr><td>Query any mart table</td><td>&lt; R1</td></tr>
+<tr><td>Generate HTML dashboard</td><td>~R50-60 (audience detail queries)</td></tr>
+<tr><td>Daily refresh (incremental)</td><td>~R1</td></tr>
+</table>
+
+<div class="note"><strong>Rule of thumb:</strong> Query marts first. They're pre-aggregated and cheap. Only hit <code>stg_transactions</code> or <code>int_customer_category_spend</code> when you need customer-level detail that marts don't provide.</div>
+
+<p style="margin-top:30px;color:#94a3b8;font-size:.82rem;text-align:center">NAV Analytics Pipeline · Data & Media Network · March 2026</p>
+
+</div>
+</body></html>
