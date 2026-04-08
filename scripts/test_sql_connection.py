@@ -1,76 +1,132 @@
 """
-SQL Server Connection Test — Windows Auth
-──────────────────────────────────────────
-Connects to RSD-RBSQLDEV / BI_SANDBOX and previews BASE202601.
-Uses your Windows AD login via VPN — no password needed.
+SQL Server Connection Test — macOS + VPN
+────────────────────────────────────────
+Connects to RSD-RBSQLDEV / BI_SANDBOX from Mac over VPN.
+Since Trusted_Connection only works on Windows, this uses
+your AD domain credentials explicitly.
+
+Setup:
+    brew install microsoft/mssql-release/msodbcsql18
+    pip install pyodbc pandas python-dotenv
 
 Usage:
-    pip install pyodbc pandas
-    python test_sql_connection.py
+    1. Fill in your .env file with your AD credentials
+    2. python test_sql_connection.py
 """
 
 import sys
+import os
+import getpass
 
 try:
     import pyodbc
 except ImportError:
-    print("pyodbc not installed. Run: pip install pyodbc")
+    print("pyodbc not installed.")
+    print()
+    print("Run these commands first:")
+    print("  brew install microsoft/mssql-release/msodbcsql18")
+    print("  pip install pyodbc pandas python-dotenv")
     sys.exit(1)
 
-# ── Connection Details (from Sipho Nkosi) ────────────────────
+# ── Load .env if available ───────────────────────────────────
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# ── Connection Details ───────────────────────────────────────
 SERVER   = "RSD-RBSQLDEV"
 SERVER_IP = "10.32.176.173"
 PORT     = "1433"
 DATABASE = "BI_SANDBOX"
 TABLE    = "BASE202601"
+DOMAIN   = "FNBJNB01"
+
+# Your AD credentials (from .env or entered manually)
+AD_USERNAME = os.getenv("AD_USERNAME", "")   # just your username, no domain
+AD_PASSWORD = os.getenv("AD_PASSWORD", "")
+
+if not AD_USERNAME:
+    print("Enter your FNB AD credentials (same as your Windows/VPN login):")
+    AD_USERNAME = input("  Username (without domain): ").strip()
+
+if not AD_PASSWORD:
+    AD_PASSWORD = getpass.getpass("  Password: ")
 
 # ── Detect ODBC drivers ──────────────────────────────────────
-print("Available ODBC drivers:")
+print("\nAvailable ODBC drivers:")
 drivers = pyodbc.drivers()
 for d in drivers:
     print(f"   - {d}")
 
-sql_drivers = [d for d in drivers if "SQL Server" in d]
+sql_drivers = [d for d in drivers if "SQL Server" in d or "ODBC Driver" in d]
 if not sql_drivers:
     print("\nERROR: No SQL Server ODBC driver found!")
+    print("Install it: brew install microsoft/mssql-release/msodbcsql18")
     sys.exit(1)
 
 driver = sorted(sql_drivers)[-1]
 print(f"\nUsing driver: {driver}")
 
-# ── Try connecting (server name first, then IP) ──────────────
-def try_connect(server_addr):
-    conn_str = (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={server_addr},{PORT};"
-        f"DATABASE={DATABASE};"
-        f"Trusted_Connection=yes;"
-        f"TrustServerCertificate=yes;"
-        f"Connection Timeout=15;"
-    )
-    return pyodbc.connect(conn_str, timeout=15)
+# ── Connection attempts ──────────────────────────────────────
+# Try multiple auth methods since Mac + AD can be tricky
+
+attempts = [
+    {
+        "label": "Server name + domain credentials",
+        "server": SERVER,
+        "extra": f"UID={DOMAIN}\\{AD_USERNAME};PWD={AD_PASSWORD};",
+    },
+    {
+        "label": "IP address + domain credentials",
+        "server": SERVER_IP,
+        "extra": f"UID={DOMAIN}\\{AD_USERNAME};PWD={AD_PASSWORD};",
+    },
+    {
+        "label": "Server name + plain credentials",
+        "server": SERVER,
+        "extra": f"UID={AD_USERNAME};PWD={AD_PASSWORD};",
+    },
+    {
+        "label": "IP + plain credentials",
+        "server": SERVER_IP,
+        "extra": f"UID={AD_USERNAME};PWD={AD_PASSWORD};",
+    },
+]
 
 conn = None
 
-print(f"\nAttempt 1: Connecting to {SERVER},{PORT} / {DATABASE}...")
-try:
-    conn = try_connect(SERVER)
-    print("Connected successfully!\n")
-except pyodbc.Error as e1:
-    print(f"   Failed with server name: {e1}")
-    print(f"\nAttempt 2: Trying IP {SERVER_IP},{PORT}...")
+for i, attempt in enumerate(attempts, 1):
+    conn_str = (
+        f"DRIVER={{{driver}}};"
+        f"SERVER={attempt['server']},{PORT};"
+        f"DATABASE={DATABASE};"
+        f"{attempt['extra']}"
+        f"TrustServerCertificate=yes;"
+        f"Connection Timeout=15;"
+    )
+    print(f"\nAttempt {i}: {attempt['label']}...")
     try:
-        conn = try_connect(SERVER_IP)
-        print("Connected successfully!\n")
-    except pyodbc.Error as e2:
-        print(f"   Failed with IP: {e2}")
-        print()
-        print("Troubleshooting:")
-        print("  1. Make sure you are connected to VPN")
-        print("  2. Check you can ping: ping 10.32.176.173")
-        print("  3. This must run from a domain-joined Windows machine")
-        print("  4. Contact Sipho Nkosi or Marshall Petersen for access")
-        sys.exit(1)
+        conn = pyodbc.connect(conn_str, timeout=15)
+        print("CONNECTED!\n")
+        break
+    except pyodbc.Error as e:
+        error_msg = str(e)
+        # Don't print full password in error
+        print(f"   Failed: {error_msg[:200]}")
+
+if not conn:
+    print("\nAll connection attempts failed.")
+    print()
+    print("Troubleshooting:")
+    print("  1. Confirm VPN is connected")
+    print("  2. Try: ping 10.32.176.173")
+    print("  3. Check your credentials are correct (same as Windows login)")
+    print("  4. Ask Sipho/Marshall if your AD account has SQL Server access")
+    print("  5. You may need to request access via the Retail Sales Data Manual")
+    print("  6. Check if ODBC driver is installed: brew list msodbcsql18")
+    sys.exit(1)
 
 cursor = conn.cursor()
 
@@ -138,4 +194,3 @@ except ImportError:
 # ── Done ─────────────────────────────────────────────────────
 conn.close()
 print("\nDone. Connection closed.")
-print("\nNext step: send Prosper a screenshot of this output!")
