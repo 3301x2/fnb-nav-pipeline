@@ -106,13 +106,6 @@ FROM per_client_segment p
 JOIN client_totals  t ON p.DESTINATION = t.DESTINATION
                       AND p.CATEGORY_TWO = t.CATEGORY_TWO
 LEFT JOIN fnb_totals f ON p.segment_name = f.segment_name
-WHERE t.client_total_customers >= 1000   -- skip noisy low-volume clients
-ORDER BY p.DESTINATION, p.CATEGORY_TWO,
-         CASE p.segment_name
-             WHEN 'Champions'        THEN 1
-             WHEN 'Loyal High Value' THEN 2
-             WHEN 'Steady Mid-Tier'  THEN 3
-             WHEN 'At Risk'          THEN 4
-             WHEN 'Dormant'          THEN 5
-             ELSE 6
-         END;
+WHERE t.client_total_customers >= 1000;  -- skip noisy low-volume clients
+-- No ORDER BY: BigQuery disallows ORDER BY with CLUSTER BY in CREATE TABLE AS.
+-- Downstream queries / the Looker view sort as needed.
