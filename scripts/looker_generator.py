@@ -157,7 +157,19 @@ DASHBOARDS = {
 # ═══════════════════════════════════════════════════════════════
 
 def build_url(views, report_name, template_id=None, project=None, dataset=None):
-    """Build a Looker Studio Linking API URL for given views."""
+    """Build a Looker Studio Linking API URL.
+
+    Two modes:
+      * With template_id: emits ds.dsN.* bindings that map to aliases in the
+        template (the template must already have placeholder data sources named
+        ds0, ds1, … matching the order of `views`). One URL, one click.
+      * Without template_id: Looker Studio's Linking API treats /reporting/create
+        as "add this ONE data source to a (new or chosen) report". Passing
+        multiple ds.dsN.* blocks with no template produces the error
+        'dsN is not a valid data source alias for this report'. So in this mode
+        we only ever emit parameters for the first view. Call this repeatedly
+        (once per view) and the user stitches them into one report.
+    """
     project = project or PROJECT_ID
     dataset = dataset or DATASET
     base = "https://lookerstudio.google.com/reporting/create?"
@@ -166,10 +178,13 @@ def build_url(views, report_name, template_id=None, project=None, dataset=None):
     if template_id:
         params.append(f"c.reportId={template_id}")
         params.append("c.mode=edit")
+        emit = list(views)
+    else:
+        emit = views[:1]  # only first view, see docstring
 
     params.append(f"r.reportName={quote(report_name)}")
 
-    for i, view_name in enumerate(views):
+    for i, view_name in enumerate(emit):
         alias = f"ds{i}"
         label = ALL_VIEWS.get(view_name, view_name)
         params.extend([
@@ -275,18 +290,42 @@ def main():
     # ── Pre-built dashboard mode ──
     if args.dashboard:
         dash = DASHBOARDS[args.dashboard]
-        url = build_url(dash["views"], dash["name"], args.template, args.project, args.dataset)
         print(f"  Dashboard: {args.dashboard}")
         print(f"  {dash['desc']}")
         print(f"  Data sources: {len(dash['views'])}")
         print()
-        for v in dash["views"]:
-            print(f"    • {ALL_VIEWS.get(v, v)}")
-        print()
-        print(f"  URL:")
-        print(f"  {url}")
-        print()
-        print("  Open → Build charts → Save and share → Done")
+
+        if args.template:
+            # With a template, Looker Studio accepts ds.dsN.* bindings that
+            # correspond to data-source aliases in the template. One URL, one click.
+            url = build_url(dash["views"], dash["name"], args.template, args.project, args.dataset)
+            print("  Template mode — one URL clones the template with all data sources wired:")
+            print(f"    {url}")
+            print()
+            print("  Open → Save a copy → Done")
+        else:
+            # No template: Looker's Linking API can only attach ONE data source
+            # to a fresh /reporting/create call. Print one URL per view — click
+            # each, Looker opens with that source pre-filled, then click + to
+            # add it to the SAME report.
+            print("  NO TEMPLATE — Looker's Linking API requires one URL per data source.")
+            print("  Workflow:")
+            print("    1. Open URL #1 below — Looker creates a new blank report with")
+            print(f"       '{ALL_VIEWS.get(dash['views'][0])}' attached. Click 'Add to report'.")
+            print("    2. For URLs #2–N: open each → Looker asks which report to add the")
+            print("       data source to → pick the report you made in step 1.")
+            print("    3. When all data sources are in one report, build the pages per")
+            print("       docs/looker_build_guide_v2.html.")
+            print()
+            print("  (Tip: to skip this every time, build one template manually once,")
+            print("   save its report ID, then re-run with --template <ID>.)")
+            print()
+            for i, v in enumerate(dash["views"], 1):
+                label = ALL_VIEWS.get(v, v)
+                single_url = build_url([v], f"NAV — {label}", None, args.project, args.dataset)
+                print(f"  [{i}/{len(dash['views'])}] {label}")
+                print(f"      {single_url}")
+                print()
         return
 
     # ── Custom views mode ──
@@ -298,12 +337,20 @@ def main():
             print(f"  Run --list to see available views")
             print()
         if valid:
-            url = build_url(valid, "NAV — Custom Dashboard", args.template, args.project, args.dataset)
             print(f"  Custom dashboard with {len(valid)} views:")
             for v in valid:
                 print(f"    • {ALL_VIEWS[v]}")
             print()
-            print(f"  URL: {url}")
+            if args.template:
+                url = build_url(valid, "NAV — Custom Dashboard", args.template, args.project, args.dataset)
+                print(f"  URL: {url}")
+            else:
+                print("  No template — one URL per view (open each, add to same report):")
+                for i, v in enumerate(valid, 1):
+                    u = build_url([v], f"NAV — {ALL_VIEWS[v]}", None, args.project, args.dataset)
+                    print(f"  [{i}] {ALL_VIEWS[v]}")
+                    print(f"      {u}")
+                    print()
         return
 
     # ── Default: show all dashboard types ──
