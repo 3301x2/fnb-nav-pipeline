@@ -312,8 +312,14 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
     run_sql "${SQL_DIR}/04_marts/mart_store_time_patterns.sql" \
         "mart_store_time_patterns (time-of-day, day-of-week by store)"
 
+    run_sql "${SQL_DIR}/04_marts/mart_client_segment_mix.sql" \
+        "mart_client_segment_mix (per-client × category segment distribution — Option A)"
+
     run_sql "${SQL_DIR}/04_marts/mart_audience_catalog.sql" \
         "mart_audience_members + mart_audience_catalog (pre-packaged audiences)"
+
+    run_sql "${SQL_DIR}/04_marts/mart_audience_client_overlap.sql" \
+        "mart_audience_client_overlap (per-client audience overlap — depends on audience_members)"
 
     ok "Step 4 complete ($(elapsed ${STEP_START}))"
     echo ""
@@ -328,8 +334,10 @@ if [[ "${STEP}" == "all" || "${STEP}" == "4" ]]; then
     echo "     UNION ALL SELECT 'benchmarks', COUNT(*) FROM marts.mart_destination_benchmarks"
     echo "     UNION ALL SELECT 'store_loyalty', COUNT(*) FROM marts.mart_store_loyalty"
     echo "     UNION ALL SELECT 'store_time', COUNT(*) FROM marts.mart_store_time_patterns"
+    echo "     UNION ALL SELECT 'client_segment_mix', COUNT(*) FROM marts.mart_client_segment_mix"
     echo "     UNION ALL SELECT 'audience_members', COUNT(*) FROM marts.mart_audience_members"
-    echo "     UNION ALL SELECT 'audience_catalog', COUNT(*) FROM marts.mart_audience_catalog;"
+    echo "     UNION ALL SELECT 'audience_catalog', COUNT(*) FROM marts.mart_audience_catalog"
+    echo "     UNION ALL SELECT 'audience_client_overlap', COUNT(*) FROM marts.mart_audience_client_overlap;"
     echo ""
     if [[ "${STEP}" == "4" ]]; then
         echo "  Next: bash scripts/run.sh 5"

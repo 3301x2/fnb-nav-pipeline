@@ -114,3 +114,80 @@ LEFT JOIN `__PROJECT__.marts.mart_store_loyalty` sl
     ON db.CATEGORY_TWO = sl.CATEGORY_TWO AND db.DESTINATION = sl.DESTINATION
 LEFT JOIN `__PROJECT__.marts.mart_store_time_patterns` tp
     ON db.CATEGORY_TWO = tp.CATEGORY_TWO AND db.DESTINATION = tp.DESTINATION;
+
+
+-- v_client_segment_mix.sql
+-- Per-client × category segment distribution for Looker Studio.
+-- Feeds the "Customer Segments" page with client-specific numbers instead
+-- of the FNB-wide mix (fixes the Clicks vs PNP identical-numbers problem).
+-- Source: marts.mart_client_segment_mix (built in Step 4).
+
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_client_segment_mix` AS
+SELECT
+    csm.DESTINATION,
+    csm.CATEGORY_TWO,
+    csm.segment_name,
+    csm.segment_customers,
+    csm.segment_spend,
+    csm.client_total_customers,
+    csm.client_total_spend,
+    csm.pct_of_client_customers,
+    csm.pct_of_client_spend,
+    csm.fnb_pct_of_customers,
+    csm.index_vs_fnb,
+    cs.business_description,
+    cs.recommended_action,
+    CASE csm.segment_name
+        WHEN 'Champions'        THEN 1
+        WHEN 'Loyal High Value' THEN 2
+        WHEN 'Steady Mid-Tier'  THEN 3
+        WHEN 'At Risk'          THEN 4
+        WHEN 'Dormant'          THEN 5
+        ELSE 6
+    END AS segment_order
+FROM `__PROJECT__.marts.mart_client_segment_mix` csm
+LEFT JOIN `__PROJECT__.marts.mart_cluster_summary` cs
+    ON csm.segment_name = cs.segment_name;
+
+
+-- v_audience_catalog.sql
+-- Audience Marketplace — one row per pre-packaged audience.
+-- FNB-wide by design (advertisers buy audiences, activate via LiveRamp).
+-- Source: marts.mart_audience_catalog.
+
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_audience_catalog` AS
+SELECT
+    audience_id,
+    audience_name,
+    audience_type,
+    audience_size,
+    avg_spend,
+    avg_age,
+    pct_female,
+    avg_income,
+    top_province,
+    top_age_group,
+    top_income_group,
+    top_segment,
+    avg_churn_prob,
+    description
+FROM `__PROJECT__.marts.mart_audience_catalog`;
+
+
+-- v_audience_client_overlap.sql
+-- Thin view wrapping the pre-computed mart_audience_client_overlap table.
+-- The table is built once per pipeline run (Step 4); the view lets Looker
+-- read it without re-running the heavy join on every dashboard interaction.
+-- Keeping this as a VIEW (not a materialized re-aggregation) = R0 per query.
+
+CREATE OR REPLACE VIEW `__PROJECT__.marts.v_audience_client_overlap` AS
+SELECT
+    DESTINATION,
+    CATEGORY_TWO,
+    audience_id,
+    audience_name,
+    audience_type,
+    overlap_customers,
+    client_total_customers,
+    pct_of_client
+FROM `__PROJECT__.marts.mart_audience_client_overlap`;

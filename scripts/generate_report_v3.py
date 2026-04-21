@@ -181,15 +181,29 @@ client_geo = safe(f"""
 """)
 
 # ─── SEGMENT DATA ─────────────────────────────────────────────
+# profiles/summary describe segment DEFINITIONS (global — same meaning for every client).
+# revenue is the per-client segment MIX — pulled from mart_client_segment_mix so that
+# different clients show different distributions instead of the FNB-wide numbers.
+# Falls back to the global mix if the client × category isn't in the mart (low volume).
 print('  segments')
 profiles = safe(f"SELECT * FROM `{PROJECT}.marts.mart_cluster_profiles` ORDER BY avg_total_spend DESC")
 summary = safe(f"SELECT * FROM `{PROJECT}.marts.mart_cluster_summary` ORDER BY avg_total_spend DESC")
 revenue = safe(f"""
     SELECT segment_name,
-        ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER(),1) AS pct_cust,
-        ROUND(SUM(val_trns)*100.0/SUM(SUM(val_trns)) OVER(),1) AS pct_rev
-    FROM `{PROJECT}.marts.mart_cluster_output` GROUP BY 1 ORDER BY pct_rev DESC
+        pct_of_client_customers AS pct_cust,
+        pct_of_client_spend     AS pct_rev
+    FROM `{PROJECT}.marts.mart_client_segment_mix`
+    WHERE DESTINATION = '{CLIENT}' AND CATEGORY_TWO = '{CATEGORY}'
+    ORDER BY pct_rev DESC
 """)
+if revenue is None:
+    print(f'  ⚠ no per-client segment mix for {CLIENT} × {CATEGORY} — falling back to FNB-wide')
+    revenue = safe(f"""
+        SELECT segment_name,
+            ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER(),1) AS pct_cust,
+            ROUND(SUM(val_trns)*100.0/SUM(SUM(val_trns)) OVER(),1) AS pct_rev
+        FROM `{PROJECT}.marts.mart_cluster_output` GROUP BY 1 ORDER BY pct_rev DESC
+    """)
 
 # ─── ML VALIDATION ────────────────────────────────────────────
 print('  ML models')

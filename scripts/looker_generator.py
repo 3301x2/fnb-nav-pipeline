@@ -62,6 +62,17 @@ ALL_VIEWS = {
     "v_churn_explained":     "Churn Explained (ML Feature Drivers)",
     "v_category_propensity": "Category Propensity (Next-Best)",
     "v_customer_clv":        "Customer Lifetime Value",
+    # Per-client + audience marketplace (added April 2026)
+    "v_client_segment_mix":      "Per-Client Segment Mix",
+    "v_audience_catalog":        "Audience Marketplace (FNB-wide)",
+    "v_audience_client_overlap": "Audience × Client Overlap",
+    # Pre-joined dashboard views (one-stop per page)
+    "v_dashboard_overview":      "Dashboard — Overview scorecards",
+    "v_dashboard_segments":      "Dashboard — Segment definitions",
+    "v_dashboard_churn":         "Dashboard — Churn + CLV + Momentum",
+    "v_dashboard_client_pitch":  "Dashboard — Client pitch (benchmarks + loyalty + time)",
+    "v_pitch_internal":          "Pitch — Internal (real names)",
+    "v_pitch_external":          "Pitch — External (anonymised competitors)",
 }
 
 # Pre-built dashboard themes
@@ -117,7 +128,26 @@ DASHBOARDS = {
     "full": {
         "name": "NAV — Complete Analytics Platform",
         "views": list(ALL_VIEWS.keys()),
-        "desc": "All 19 views — the full monty"
+        "desc": "Every view — the full monty"
+    },
+    # ONE ROBUST DASHBOARD — the recommended build for the team.
+    # Covers every page needed for client pitches without bloating the report.
+    # Uses pre-joined dashboard views where available so fewer blends in Looker.
+    "robust": {
+        "name": "NAV — Robust Client Pitch Dashboard",
+        "views": [
+            "v_dashboard_overview",       # Page 1: Overview KPIs
+            "v_dashboard_client_pitch",   # Page 2: Client Pitch (benchmarks + loyalty + time)
+            "v_pitch_external",           # Page 2 companion: anonymised competitor view
+            "v_client_segment_mix",       # Page 3: Per-client segment distribution (THE FIX)
+            "v_dashboard_segments",       # Page 3 companion: segment definitions
+            "v_audience_catalog",         # Page 4: Audience Marketplace (FNB-wide)
+            "v_audience_client_overlap",  # Page 4 companion: which audiences are MY customers in
+            "v_dashboard_churn",          # Page 5: Churn + CLV + Momentum
+            "v_monthly_trends",           # Page 6: Trends
+            "v_geo_insights",             # Page 6 companion: Geo
+        ],
+        "desc": "Single dashboard, 6 pages: Overview, Client Pitch, Per-Client Segments, Audience Marketplace, Churn/CLV, Trends/Geo. Uses per-client mart to avoid identical numbers across clients."
     },
 }
 

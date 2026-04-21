@@ -190,12 +190,31 @@ print('  segments')
 profiles = safe(f"SELECT * FROM `{PROJECT}.marts.mart_cluster_profiles` ORDER BY avg_total_spend DESC")
 summary = safe(f"SELECT * FROM `{PROJECT}.marts.mart_cluster_summary`")
 
-print('  revenue concentration')
+print('  revenue concentration (FNB-wide baseline)')
 revenue = safe(f"""
     SELECT segment_name,
         ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER(),1) AS pct_cust,
         ROUND(SUM(val_trns)*100.0/SUM(SUM(val_trns)) OVER(),1) AS pct_rev
     FROM `{PROJECT}.marts.mart_cluster_output` GROUP BY 1
+""")
+
+print('  per-client segment mix (the fix — different numbers per client)')
+client_segment_mix = safe(f"""
+    SELECT DESTINATION, CATEGORY_TWO, segment_name,
+        segment_customers, segment_spend,
+        client_total_customers, client_total_spend,
+        pct_of_client_customers AS pct_cust,
+        pct_of_client_spend     AS pct_rev,
+        fnb_pct_of_customers,
+        index_vs_fnb
+    FROM `{PROJECT}.marts.mart_client_segment_mix`
+""")
+
+print('  audience × client overlap (which audiences are MY customers in)')
+aud_client_overlap = safe(f"""
+    SELECT DESTINATION, CATEGORY_TWO, audience_id, audience_name, audience_type,
+        overlap_customers, client_total_customers, pct_of_client
+    FROM `{PROJECT}.marts.mart_audience_client_overlap`
 """)
 
 print('  churn')
@@ -402,6 +421,8 @@ if data_json is None:
         'profiles': json.loads(to_json(profiles)),
         'summary': json.loads(to_json(summary)),
         'revenue': json.loads(to_json(revenue)),
+        'client_segment_mix': json.loads(to_json(client_segment_mix)),
+        'aud_client_overlap': json.loads(to_json(aud_client_overlap)),
         'churn': json.loads(to_json(churn)),
         'churn_reasons': json.loads(to_json(churn_reasons)),
         'clv': json.loads(to_json(clv)),
@@ -569,7 +590,7 @@ tr:hover{{background:#f8fafc}}
 {''.join(f'<option value="{c}">{c}</option>' for c in cats)}
 </select>
 <label>Client</label>
-<select id="fClient" onchange="renderPitch()"></select>
+<select id="fClient" onchange="renderPitch();renderOverview();renderAudiences();"></select>
 <label>Competitors</label>
 <select id="fTopN" onchange="renderPitch()">
 <option value="5">Top 5</option><option value="8" selected>Top 8</option><option value="15">Top 15</option><option value="999">All</option>
@@ -585,8 +606,8 @@ tr:hover{{background:#f8fafc}}
 <div id="dateRange" style="background:#fff;border-radius:10px;padding:12px 18px;margin-bottom:14px;border:1px solid #f1f5f9;display:flex;gap:24px;align-items:center;flex-wrap:wrap"></div>
 <div class="row r5" id="ovKpis"></div>
 <div class="row r2">
-<div class="sec"><h3>Customers by segment</h3><div class="chbox"><canvas id="chSegPie"></canvas></div></div>
-<div class="sec"><h3>Revenue concentration</h3><div class="chbox"><canvas id="chRevBar"></canvas></div></div>
+<div class="sec"><h3>Customers by segment <span id="segPieScope" style="font-size:.72rem;color:#64748b;font-weight:400"></span></h3><div class="chbox"><canvas id="chSegPie"></canvas></div></div>
+<div class="sec"><h3>Revenue concentration <span id="revBarScope" style="font-size:.72rem;color:#64748b;font-weight:400"></span></h3><div class="chbox"><canvas id="chRevBar"></canvas></div></div>
 </div>
 <div class="row r3" id="ovHighlights"></div>
 <div class="sec"><h3>Churn risk distribution</h3><div class="chbox"><canvas id="chChurnPie"></canvas></div></div>
@@ -647,7 +668,7 @@ tr:hover{{background:#f8fafc}}
 
 <!-- PAGE 5: AUDIENCES -->
 <div class="pg" id="pg5">
-<div style="margin-bottom:4px"><h2 style="font-size:1.3rem;font-weight:700;color:#0f172a;margin:0">Audience Marketplace</h2><p style="font-size:.82rem;color:#64748b;margin:4px 0 16px">Pre-packaged audiences ready for activation via LiveRamp → Meta, Google, TikTok</p></div>
+<div style="margin-bottom:4px"><h2 style="font-size:1.3rem;font-weight:700;color:#0f172a;margin:0">Audience Marketplace <span style="font-size:.7rem;font-weight:500;color:#64748b;background:#f1f5f9;padding:3px 8px;border-radius:10px;vertical-align:middle;margin-left:6px">FNB-wide · not filtered by client</span></h2><p style="font-size:.82rem;color:#64748b;margin:4px 0 16px">Pre-packaged audiences ready for activation via LiveRamp → Meta, Google, TikTok. Audience sizes below are across all FNB customers. For <em>this client's</em> overlap with each audience, see the "Top audiences among this client's customers" chart at the bottom of the page.</p></div>
 <div class="row r4" id="audKpis"></div>
 <div class="aud-filters">
 <label>Type</label>
@@ -664,6 +685,9 @@ tr:hover{{background:#f8fafc}}
 <span class="aud-count" id="audCount"></span>
 </div>
 <div class="aud-grid" id="audGrid"></div>
+
+<!-- Per-client overlap — honest reframe: which of these audiences is MY client's customer base in? -->
+<div class="sec" style="margin-top:24px"><h3>Top audiences among this client's customers <span id="audOverlapScope" style="font-size:.72rem;color:#64748b;font-weight:400"></span></h3><div id="audOverlapTable"></div></div>
 </div>
 
 <!-- AUDIENCE DETAIL MODAL -->
@@ -770,6 +794,8 @@ function onFilter() {{
         sel.value = uniqueClients[0];
     }}
     renderPitch();
+    renderOverview();    // Overview's segment charts are now client-aware
+    renderAudiences();   // Audience overlap section is client × category scoped
 }}
 
 function setAnon(v) {{
@@ -816,14 +842,37 @@ function renderOverview() {{
         card('At-risk spend', fmt(arSpend), `<span style="color:#dc2626">${{num(arCusts)}} critical + high</span>`) +
         card('10% recovery', fmt(arSpend*0.1));
 
+    // Pick per-client mix if a client × category is selected AND data exists for it;
+    // otherwise fall back to FNB-wide (D.profiles / D.revenue).
+    const selCat = document.getElementById('fCat') ? document.getElementById('fCat').value : '';
+    const selCli = document.getElementById('fClient') ? document.getElementById('fClient').value : '';
+    const csm = (D.client_segment_mix || []).filter(r => r.DESTINATION === selCli && r.CATEGORY_TWO === selCat);
+    const usingClientMix = csm.length > 0;
+
+    const scopeLabel = usingClientMix
+        ? `— ${{selCli}} in ${{selCat}}`
+        : `— FNB-wide (select a client + category for a client-specific view)`;
+    const segPieScope = document.getElementById('segPieScope');
+    const revBarScope = document.getElementById('revBarScope');
+    if (segPieScope) segPieScope.textContent = scopeLabel;
+    if (revBarScope) revBarScope.textContent = scopeLabel;
+
     // Segment pie
-    if(D.profiles) {{
-        makeChart('chSegPie', {{type:'doughnut',data:{{labels:D.profiles.map(p=>p.segment_name),datasets:[{{data:D.profiles.map(p=>p.customer_count),backgroundColor:C,borderWidth:2,borderColor:'#fff'}}]}},options:{{responsive:true,maintainAspectRatio:false,plugins:{{title:{{display:false}}}}}}}});
+    const pieRows = usingClientMix
+        ? csm.slice().sort((a,b)=>{{const o=['Champions','Loyal High Value','Steady Mid-Tier','At Risk','Dormant'];return o.indexOf(a.segment_name)-o.indexOf(b.segment_name);}})
+        : (D.profiles || []);
+    const pieLabels = usingClientMix ? pieRows.map(r=>r.segment_name) : pieRows.map(p=>p.segment_name);
+    const pieData   = usingClientMix ? pieRows.map(r=>r.segment_customers) : pieRows.map(p=>p.customer_count);
+    if(pieLabels.length) {{
+        makeChart('chSegPie', {{type:'doughnut',data:{{labels:pieLabels,datasets:[{{data:pieData,backgroundColor:C,borderWidth:2,borderColor:'#fff'}}]}},options:{{responsive:true,maintainAspectRatio:false,plugins:{{title:{{display:false}}}}}}}});
     }}
 
-    // Revenue bar
-    if(D.revenue) {{
-        makeChart('chRevBar', {{type:'bar',data:{{labels:D.revenue.map(r=>r.segment_name),datasets:[{{label:'% customers',data:D.revenue.map(r=>r.pct_cust),backgroundColor:'#94a3b8',borderRadius:4}},{{label:'% revenue',data:D.revenue.map(r=>r.pct_rev),backgroundColor:'#0f172a',borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,plugins:{{title:{{display:false}}}}}}}});
+    // Revenue bar (% customers vs % revenue for each segment)
+    const barRows = usingClientMix
+        ? csm.slice().sort((a,b)=>b.pct_rev-a.pct_rev)
+        : (D.revenue || []);
+    if(barRows.length) {{
+        makeChart('chRevBar', {{type:'bar',data:{{labels:barRows.map(r=>r.segment_name),datasets:[{{label:'% customers',data:barRows.map(r=>r.pct_cust),backgroundColor:'#94a3b8',borderRadius:4}},{{label:'% revenue',data:barRows.map(r=>r.pct_rev),backgroundColor:'#0f172a',borderRadius:4}}]}},options:{{responsive:true,maintainAspectRatio:false,plugins:{{title:{{display:false}}}}}}}});
     }}
 
     // Churn pie
@@ -1158,6 +1207,29 @@ function renderAudiences() {{
     }});
 
     document.getElementById('audGrid').innerHTML = html || '<div class="empty">No audiences match your filters</div>';
+
+    // Per-client overlap section — answers "which of these audiences are MY client's customers in?"
+    const oCat = document.getElementById('fCat') ? document.getElementById('fCat').value : '';
+    const oCli = document.getElementById('fClient') ? document.getElementById('fClient').value : '';
+    const overlap = (D.aud_client_overlap || []).filter(r => r.DESTINATION === oCli && r.CATEGORY_TWO === oCat);
+    const scopeEl = document.getElementById('audOverlapScope');
+    const tableEl = document.getElementById('audOverlapTable');
+    if (tableEl) {{
+        if (overlap.length === 0) {{
+            if (scopeEl) scopeEl.textContent = oCli && oCat ? `— no overlap data for ${{oCli}} in ${{oCat}} (below 1,000-customer threshold)` : `— select a client and category above`;
+            tableEl.innerHTML = '<div class="empty" style="padding:20px;color:#94a3b8;font-size:.85rem">Pick a client and category in the header filters to see which audiences their customers over-index on.</div>';
+        }} else {{
+            if (scopeEl) scopeEl.textContent = `— ${{oCli}} in ${{oCat}}`;
+            const top = overlap.slice().sort((a,b)=>b.pct_of_client-a.pct_of_client).slice(0, 10);
+            const rows = top.map(r => [
+                `<strong>${{r.audience_name}}</strong>`,
+                r.audience_type,
+                num(r.overlap_customers),
+                r.pct_of_client.toFixed(1) + '%',
+            ]);
+            tableEl.innerHTML = tableHtml(['Audience','Type','Customers in overlap','% of this client base'], rows);
+        }}
+    }}
 }}
 
 // ─── MODAL: Audience detail ───

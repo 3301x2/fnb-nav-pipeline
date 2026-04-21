@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Looker Studio Build Guide v2 — NAV Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#fafbfc;color:#1a202c;line-height:1.7;padding:20px}
+.ctn{max-width:940px;margin:0 auto}
+h1{font-size:2rem;font-weight:700;color:#0f172a;margin:40px 0 8px}
+h2{font-size:1.4rem;font-weight:700;color:#1e3a5f;margin:32px 0 8px;padding-top:20px;border-top:1px solid #e2e8f0}
+h3{font-size:1.1rem;font-weight:600;color:#0f172a;margin:24px 0 6px}
+p{margin:8px 0;color:#374151}
+.step{background:#fff;border-radius:12px;padding:20px 24px;margin:16px 0;border:1px solid #f1f5f9;counter-increment:step}
+.step::before{content:"Step " counter(step);display:block;font-size:.75rem;font-weight:600;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.step h4{font-size:1rem;font-weight:600;margin-bottom:6px}
+.step p{font-size:.92rem}
+.sec{counter-reset:step}
+code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.85rem;color:#0f172a}
+pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:14px 18px;margin:10px 0;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.5}
+.warn{background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.9rem}
+.tip{background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.9rem}
+.important{background:#fef2f2;border-left:4px solid #ef4444;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.9rem}
+.cost{background:#eff6ff;border-left:4px solid #2563eb;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.9rem}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.85rem}
+th{background:#0f172a;color:white;padding:8px 12px;text-align:left;font-size:.8rem}
+td{padding:8px 12px;border-bottom:1px solid #f1f5f9}
+.page-tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.78rem;font-weight:600;margin-right:6px}
+.pt-ov{background:#dbeafe;color:#1e40af}.pt-cp{background:#fef3c7;color:#92400e}.pt-sg{background:#dcfce7;color:#166534}
+.pt-au{background:#f1f5f9;color:#475569}.pt-ch{background:#fee2e2;color:#991b1b}.pt-tr{background:#f3e5f5;color:#7b1fa2}
+nav{position:sticky;top:0;background:#fff;padding:10px 0;border-bottom:1px solid #e2e8f0;z-index:10;margin-bottom:20px}
+nav a{display:inline-block;padding:4px 12px;margin:2px;border-radius:6px;text-decoration:none;color:#64748b;font-size:.82rem;font-weight:500}
+nav a:hover{background:#f1f5f9;color:#1e3a5f}
+.checklist{list-style:none;padding:0}
+.checklist li{padding:6px 0 6px 28px;position:relative;font-size:.9rem}
+.checklist li::before{content:"☐";position:absolute;left:0;font-size:1.1rem}
+.badge{display:inline-block;background:#0f172a;color:#fff;padding:3px 8px;border-radius:4px;font-size:.72rem;font-weight:600;letter-spacing:.3px}
+</style>
+</head><body>
+<div class="ctn">
+
+<h1>Looker Studio Build Guide <span class="badge">v2 — April 2026</span></h1>
+<p>Build <strong>one robust NAV Analytics dashboard</strong> that covers every pitch scenario. Supersedes the earlier three guides. ~3 hours if you follow it end-to-end.</p>
+
+<div class="cost"><strong>Cost note:</strong> This build runs no ML training and no full-data scans. The only BigQuery work is Step 4 of the pipeline (~R10 once) plus the SQL views (R0 — views don't store data). Do <strong>not</strong> run <code>bash scripts/run.sh</code> without a step argument — that reprocesses everything.</div>
+
+<nav>
+<a href="#what">What you're building</a>
+<a href="#prereqs">Prerequisites</a>
+<a href="#datasources">Data sources</a>
+<a href="#global">Global filters</a>
+<a href="#page1">Overview</a>
+<a href="#page2">Client pitch</a>
+<a href="#page3">Segments</a>
+<a href="#page4">Audiences</a>
+<a href="#page5">Churn & CLV</a>
+<a href="#page6">Trends & Geo</a>
+<a href="#anon">Anonymisation</a>
+<a href="#polish">Polish</a>
+</nav>
+
+<!-- ═══ WHAT ═══ -->
+<h2 id="what">What you're building</h2>
+
+<p>One Looker Studio report, six pages, driven by two global filters (<strong>Client</strong> and <strong>Category</strong>). Every page adapts to those filters, so the analyst picks a client once and every chart updates.</p>
+
+<table>
+<tr><th>Page</th><th>Purpose</th><th>Primary data source</th></tr>
+<tr><td><span class="page-tag pt-ov">Overview</span></td><td>Pipeline health + headline KPIs</td><td><code>v_dashboard_overview</code></td></tr>
+<tr><td><span class="page-tag pt-cp">Client Pitch</span></td><td>Client market share, loyalty, time patterns vs competitors</td><td><code>v_dashboard_client_pitch</code> + <code>v_pitch_external</code></td></tr>
+<tr><td><span class="page-tag pt-sg">Segments</span></td><td>Per-client segment distribution + definitions</td><td><code>v_client_segment_mix</code> + <code>v_dashboard_segments</code></td></tr>
+<tr><td><span class="page-tag pt-au">Audiences</span></td><td>FNB-wide audience marketplace + client overlap</td><td><code>v_audience_catalog</code> + <code>v_audience_client_overlap</code></td></tr>
+<tr><td><span class="page-tag pt-ch">Churn &amp; CLV</span></td><td>Risk, momentum, lifetime value</td><td><code>v_dashboard_churn</code></td></tr>
+<tr><td><span class="page-tag pt-tr">Trends &amp; Geo</span></td><td>Monthly trends + provincial spend</td><td><code>v_monthly_trends</code> + <code>v_geo_insights</code></td></tr>
+</table>
+
+<div class="important"><strong>Key fix in this version:</strong> The Segments page now uses <code>v_client_segment_mix</code>, which returns different numbers for Clicks vs Pick n Pay vs any other client. The old build pulled from <code>mart_cluster_output</code> un-filtered, so every client looked identical. If you're updating an existing report, Step 3 below is the one that matters.</div>
+
+<!-- ═══ PREREQUISITES ═══ -->
+<h2 id="prereqs">Prerequisites — run on the sandbox machine first</h2>
+
+<div class="sec">
+
+<div class="step"><h4>Pull the latest pipeline code</h4>
+<pre>cd ~/fnb-nav-pipeline
+git pull</pre>
+</div>
+
+<div class="step"><h4>Build the new marts (Step 4 only — cheap)</h4>
+<p>Runs the existing mart layer plus the two new tables: <code>mart_client_segment_mix</code> and <code>mart_audience_client_overlap</code>. No ML retraining, no staging rebuild.</p>
+<pre>bash scripts/run.sh sandbox 4</pre>
+<div class="cost">Expected cost: under R10. You are <strong>not</strong> scanning the 2.2B-row transactions table — these marts read from already-built intermediate tables.</div>
+</div>
+
+<div class="step"><h4>Build / refresh the Looker views (free)</h4>
+<pre>bash scripts/run.sh sandbox 6</pre>
+<p>Views store zero data — they're just saved queries. Refreshing them costs nothing. This step creates the new <code>v_client_segment_mix</code>, <code>v_audience_catalog</code>, and <code>v_audience_client_overlap</code> alongside the existing 19 views.</p>
+</div>
+
+<div class="step"><h4>Verify the new objects exist</h4>
+<pre>bq ls fmn-sandbox:marts | grep -E "mart_client_segment_mix|mart_audience_client_overlap|v_client_segment_mix|v_audience_catalog|v_audience_client_overlap"</pre>
+<p>You should see all five names. If any are missing, re-run the step that creates them.</p>
+</div>
+
+<div class="step"><h4>Open Looker Studio</h4>
+<p>Go to <code>lookerstudio.google.com</code>, sign in with your FNB Google account, click <strong>+ Create → Report</strong>. Name it <strong>NAV Analytics Dashboard</strong>.</p>
+</div>
+
+</div>
+
+<!-- ═══ DATA SOURCES ═══ -->
+<h2 id="datasources">Connect data sources</h2>
+
+<p>Connect these <strong>10 views</strong>. Each one is a BigQuery view in <code>fmn-sandbox.marts</code>. Do this once and all pages share them.</p>
+
+<div class="tip"><strong>Shortcut:</strong> run <code>python scripts/looker_generator.py --dashboard robust</code> on the sandbox machine. It prints a URL that, when opened, pre-fills every data source below. You still build the layout, but you skip the 10× connect-data-source dance.</div>
+
+<table>
+<tr><th>#</th><th>View</th><th>Used on page</th></tr>
+<tr><td>1</td><td><code>v_dashboard_overview</code></td><td>Overview</td></tr>
+<tr><td>2</td><td><code>v_dashboard_client_pitch</code></td><td>Client Pitch</td></tr>
+<tr><td>3</td><td><code>v_pitch_external</code></td><td>Client Pitch (anonymised competitors)</td></tr>
+<tr><td>4</td><td><code>v_client_segment_mix</code></td><td>Segments <em>(the per-client one)</em></td></tr>
+<tr><td>5</td><td><code>v_dashboard_segments</code></td><td>Segments (definitions)</td></tr>
+<tr><td>6</td><td><code>v_audience_catalog</code></td><td>Audiences</td></tr>
+<tr><td>7</td><td><code>v_audience_client_overlap</code></td><td>Audiences (client overlap)</td></tr>
+<tr><td>8</td><td><code>v_dashboard_churn</code></td><td>Churn &amp; CLV</td></tr>
+<tr><td>9</td><td><code>v_monthly_trends</code></td><td>Trends &amp; Geo</td></tr>
+<tr><td>10</td><td><code>v_geo_insights</code></td><td>Trends &amp; Geo</td></tr>
+</table>
+
+<div class="sec">
+
+<div class="step"><h4>Add a data source manually (do once, repeat 10× — or use the shortcut above)</h4>
+<p>Click <strong>Add data</strong> → <strong>BigQuery</strong> → authorise → <strong>My projects</strong> → <code>fmn-sandbox</code> → <code>marts</code> → pick the view → <strong>Add</strong>. Rename it to match the view name exactly so later steps are unambiguous.</p>
+</div>
+
+<div class="step"><h4>Set field types</h4>
+<p>For each view Looker has just connected, open the fields panel. Make sure:</p>
+<ul class="checklist">
+<li>Any field ending in <code>_pct</code>, <code>pct_</code>, <code>share</code>, or <code>rate</code> is <strong>Percent</strong> (not Number)</li>
+<li>Any field ending in <code>_spend</code>, <code>_val</code>, <code>income</code> is <strong>Number (currency ZAR)</strong></li>
+<li><code>month</code> fields are <strong>Date (YYYY-MM)</strong></li>
+<li><code>DESTINATION</code> and <code>CATEGORY_TWO</code> are <strong>Text</strong> and set as dimensions, not metrics</li>
+</ul>
+<p>Get this right once per data source — it propagates everywhere.</p>
+</div>
+
+</div>
+
+<!-- ═══ GLOBAL FILTERS ═══ -->
+<h2 id="global">Set up global filters (do this before Page 1)</h2>
+
+<p>Two dropdown controls that apply to <strong>every page</strong>. This is what makes the dashboard feel like one tool instead of six reports.</p>
+
+<div class="sec">
+
+<div class="step"><h4>Add a Client (DESTINATION) dropdown</h4>
+<p>Toolbar → <strong>Add a control</strong> → <strong>Drop-down list</strong>. Place it top-right of the header band. In the properties panel:</p>
+<ul class="checklist">
+<li>Data source: <code>v_dashboard_client_pitch</code></li>
+<li>Control field: <code>DESTINATION</code></li>
+<li>Label: <em>Client</em></li>
+<li>Default selection: <em>Clicks</em> (or any client — you can change at runtime)</li>
+</ul>
+<p>Now <strong>right-click the control → Make report-level</strong>. This is the key step — it makes the filter affect every page, not just this one.</p>
+</div>
+
+<div class="step"><h4>Add a Category (CATEGORY_TWO) dropdown</h4>
+<p>Same process, field <code>CATEGORY_TWO</code>, label <em>Category</em>. Make it report-level too.</p>
+</div>
+
+<div class="step"><h4>Add a date range control (optional but recommended)</h4>
+<p>Toolbar → <strong>Add a control</strong> → <strong>Date range control</strong>. Default: <strong>Last 12 months</strong>. Make report-level. Only pages that use <code>v_monthly_trends</code> will respect it — that's fine.</p>
+</div>
+
+<div class="warn"><strong>Filter gotcha:</strong> Looker Studio auto-applies a control to any chart whose data source contains the field. If a chart uses a view that doesn't have <code>DESTINATION</code> (like <code>v_dashboard_overview</code>), the filter is ignored — that's expected. The Overview page is intentionally FNB-wide.</div>
+
+</div>
+
+<!-- ═══ PAGE 1 OVERVIEW ═══ -->
+<h2 id="page1"><span class="page-tag pt-ov">Overview</span> Page 1 — Executive summary</h2>
+
+<div class="sec">
+
+<div class="step"><h4>Scorecard row (5 scorecards across the top)</h4>
+<p>Data source: <code>v_dashboard_overview</code>. One scorecard per metric:</p>
+<ul class="checklist">
+<li>Total transactions → <code>total_transactions</code></li>
+<li>Total customers → <code>total_customers</code></li>
+<li>Segmented customers → <code>segmented_customers</code></li>
+<li>Churn scored → <code>churn_scored</code></li>
+<li>Destinations → <code>destinations</code></li>
+</ul>
+</div>
+
+<div class="step"><h4>Headline bar: selected client snapshot</h4>
+<p>Below the scorecards, add a single-row <strong>table</strong>. Data source: <code>v_dashboard_client_pitch</code>. Dimensions: <code>DESTINATION</code>, <code>CATEGORY_TWO</code>. Metrics: <code>customers</code>, <code>total_spend</code>, <code>market_share_pct</code>, <code>avg_share_of_wallet</code>. The report-level filters will narrow this to the selected client × category automatically.</p>
+</div>
+
+<div class="step"><h4>Segment pie (preview)</h4>
+<p>Add a <strong>pie chart</strong>. Data source: <code>v_client_segment_mix</code>. Dimension: <code>segment_name</code>. Metric: <code>pct_of_client_customers</code>. Title: <em>"Selected client's customer mix"</em>. This is the 10-second hook — already different for every client.</p>
+</div>
+
+</div>
+
+<!-- ═══ PAGE 2 CLIENT PITCH ═══ -->
+<h2 id="page2"><span class="page-tag pt-cp">Client Pitch</span> Page 2 — Market position</h2>
+
+<div class="sec">
+
+<div class="step"><h4>KPI strip (5 scorecards)</h4>
+<p>Data source: <code>v_dashboard_client_pitch</code>. Metrics: <code>customers</code>, <code>total_spend</code>, <code>market_share_pct</code>, <code>penetration_pct</code>, <code>avg_share_of_wallet</code>. Report-level filters already scope to client × category.</p>
+</div>
+
+<div class="step"><h4>Competitor bar chart (anonymised)</h4>
+<p>Add a <strong>horizontal bar chart</strong>. Data source: <code>v_pitch_external</code>. Dimension: <code>display_name</code> (this is the anonymised label — "Competitor 1", "Market Leader", etc.). Metric: <code>total_spend</code>. Sort descending. Title: <em>"Market position in category"</em>.</p>
+<div class="tip">Use <code>v_pitch_external</code> on any page that will be shown to a client externally. Use <code>v_pitch_internal</code> (real names) on pages that stay inside the team.</div>
+</div>
+
+<div class="step"><h4>Loyalty bands</h4>
+<p>Add a <strong>stacked bar</strong>. Data source: <code>v_dashboard_client_pitch</code>. Dimension: <code>DESTINATION</code>. Metrics: <code>band_1_store</code>, <code>band_2_stores</code>, <code>band_3_4_stores</code>, <code>band_5_7_stores</code>, <code>band_8_plus</code>. Shows how concentrated or spread a customer's shops are.</p>
+</div>
+
+<div class="step"><h4>Time-of-day heatmap</h4>
+<p>Add a <strong>pivot table with heatmap</strong>. Data source: <code>v_dashboard_client_pitch</code>. Rows: day-of-week (create a calculated dimension <code>CASE peak_day_number WHEN 1 THEN 'Sun' …</code>). Columns: <code>peak_hour</code>. Metric: <code>pct_weekend</code> (or build it from day × hour fields if you want a full heatmap).</p>
+</div>
+
+</div>
+
+<!-- ═══ PAGE 3 SEGMENTS ═══ -->
+<h2 id="page3"><span class="page-tag pt-sg">Segments</span> Page 3 — Per-client segmentation <em>(the fix)</em></h2>
+
+<div class="important"><strong>Read this before you build Page 3.</strong> The 5 segments (Champions, Loyal High Value, Steady Mid-Tier, At Risk, Dormant) are <strong>defined globally</strong> across all FNB customers — a "Champion" means the same thing everywhere. But the <strong>mix</strong> of segments is <strong>different for every client</strong>. This page uses <code>v_client_segment_mix</code> so Clicks and PNP show different numbers. Don't connect this page to <code>mart_cluster_output</code> directly — that's the old global table that caused the identical-numbers bug.</div>
+
+<div class="sec">
+
+<div class="step"><h4>Segment distribution (the per-client view)</h4>
+<p>Add a <strong>column chart</strong>. Data source: <code>v_client_segment_mix</code>. Dimension: <code>segment_name</code> (sort by <code>segment_order</code> ascending to get Champions first). Metric: <code>pct_of_client_customers</code>. Report-level filter on <code>DESTINATION</code> + <code>CATEGORY_TWO</code> makes this client-specific. Title: <em>"Customer mix for selected client"</em>.</p>
+</div>
+
+<div class="step"><h4>Over- / under-index vs FNB</h4>
+<p>Add a <strong>bullet chart</strong> or a simple bar. Data source: <code>v_client_segment_mix</code>. Dimension: <code>segment_name</code>. Metric: <code>index_vs_fnb</code>. Reference line at 100. Anything above 100 means this client over-indexes on that segment vs FNB-wide — a pitch hook ("your customers are 1.4× more likely to be Champions than the typical FNB customer").</p>
+</div>
+
+<div class="step"><h4>Segment definitions table</h4>
+<p>Add a <strong>table</strong>. Data source: <code>v_dashboard_segments</code>. Dimensions: <code>segment_name</code>, <code>business_description</code>, <code>recommended_action</code>. Metrics: <code>avg_spend</code>, <code>avg_txns</code>, <code>avg_recency_days</code>. This is the reference — what each segment <em>means</em>, identical for every client.</p>
+</div>
+
+<div class="step"><h4>Spend contribution</h4>
+<p>Add a <strong>pie</strong> or donut. Data source: <code>v_client_segment_mix</code>. Dimension: <code>segment_name</code>. Metric: <code>pct_of_client_spend</code>. Title: <em>"Where the client's revenue comes from"</em>. Often the Champions slice is much bigger here than on the customer-count chart — that's the 80/20 story.</p>
+</div>
+
+</div>
+
+<!-- ═══ PAGE 4 AUDIENCES ═══ -->
+<h2 id="page4"><span class="page-tag pt-au">Audiences</span> Page 4 — Audience Marketplace</h2>
+
+<div class="warn"><strong>Scope reminder:</strong> The Audience Marketplace is <strong>FNB-wide by design</strong>. Advertisers buy these pre-packaged audiences (e.g. "High value champions", "Young families 26–40") and activate them via LiveRamp for their own campaigns. The audiences don't change when you change the client filter. What <em>does</em> change is the overlap chart below — "which of these audiences are my customers already in?".</div>
+
+<div class="sec">
+
+<div class="step"><h4>Audience marketplace grid</h4>
+<p>Add a <strong>table</strong>. Data source: <code>v_audience_catalog</code>. Dimensions: <code>audience_id</code>, <code>audience_name</code>, <code>audience_type</code>, <code>description</code>. Metrics: <code>audience_size</code>, <code>avg_spend</code>, <code>avg_age</code>, <code>pct_female</code>, <code>avg_income</code>. Add a filter control on <code>audience_type</code> so the user can narrow to Demographic / Lifestyle / Behavioral / Geographic / Seasonal / Cross-category.</p>
+</div>
+
+<div class="step"><h4>Client overlap chart (per-client slice of the marketplace)</h4>
+<p>Add a <strong>horizontal bar</strong>. Data source: <code>v_audience_client_overlap</code>. Dimension: <code>audience_name</code>. Metric: <code>pct_of_client</code>. Sort descending. Top N = 10. Title: <em>"Top audiences among {selected client}'s customers"</em>. Report-level filter on <code>DESTINATION</code> + <code>CATEGORY_TWO</code> drives this.</p>
+<div class="tip">This is where the page earns its keep. The grid above says "we have 34 audiences for sale". The overlap chart says "and here's which of them your customers are already in" — that's the activation conversation.</div>
+</div>
+
+<div class="step"><h4>Audience type summary</h4>
+<p>Add a <strong>column chart</strong>. Data source: <code>v_audience_catalog</code>. Dimension: <code>audience_type</code>. Metric: <code>SUM(audience_size)</code>. Title: <em>"Reach by audience type"</em>. Lets a buyer see the scale of each category of audience at a glance.</p>
+</div>
+
+</div>
+
+<!-- ═══ PAGE 5 CHURN ═══ -->
+<h2 id="page5"><span class="page-tag pt-ch">Churn &amp; CLV</span> Page 5 — Risk &amp; lifetime value</h2>
+
+<div class="sec">
+
+<div class="step"><h4>Risk-level scorecards</h4>
+<p>Data source: <code>v_dashboard_churn</code>. Filter: <code>churn_risk_level IN ('Critical', 'High')</code>. Metrics: <code>COUNT(UNIQUE_ID)</code>, <code>SUM(total_spend)</code>. Two scorecards side by side.</p>
+</div>
+
+<div class="step"><h4>Segment × risk heatmap</h4>
+<p>Pivot table. Data source: <code>v_dashboard_churn</code>. Rows: <code>segment_name</code>. Columns: <code>churn_risk_level</code>. Metric: <code>COUNT(UNIQUE_ID)</code>. Heatmap style. Quickly shows which segments are bleeding.</p>
+</div>
+
+<div class="step"><h4>CLV tier distribution</h4>
+<p>Column chart. Data source: <code>v_dashboard_churn</code>. Dimension: <code>clv_tier</code>. Metric: <code>SUM(predicted_clv)</code>. Title: <em>"Future revenue by CLV tier"</em>.</p>
+</div>
+
+<div class="step"><h4>Top churn reasons</h4>
+<p>Bar chart. Data source: <code>v_dashboard_churn</code>. Dimension: <code>reason_1</code>. Metric: <code>COUNT(UNIQUE_ID)</code>. Top 8. Shows the dominant drivers from the ML model.</p>
+</div>
+
+</div>
+
+<!-- ═══ PAGE 6 TRENDS ═══ -->
+<h2 id="page6"><span class="page-tag pt-tr">Trends &amp; Geo</span> Page 6 — Time &amp; place</h2>
+
+<div class="sec">
+
+<div class="step"><h4>Monthly spend trend</h4>
+<p>Time series. Data source: <code>v_monthly_trends</code>. Dimension: <code>month</code>. Breakdown: <code>DESTINATION</code>. Metric: <code>total_spend</code>. Report-level filters will narrow the <code>DESTINATION</code>s shown.</p>
+</div>
+
+<div class="step"><h4>Province spend map</h4>
+<p>Geo chart. Data source: <code>v_geo_insights</code>. Geo dimension: <code>PROVINCE</code>. Metric: <code>total_spend</code>. Zoom: South Africa.</p>
+</div>
+
+<div class="step"><h4>Municipality table</h4>
+<p>Table. Data source: <code>v_geo_insights</code>. Dimensions: <code>PROVINCE</code>, <code>MUNICIPALITY</code>. Metric: <code>total_spend</code>. Sort descending, top 20.</p>
+</div>
+
+</div>
+
+<!-- ═══ ANONYMISATION ═══ -->
+<h2 id="anon">Anonymisation — internal vs external</h2>
+
+<p>Two versions of the same data, one for inside-the-team use and one for showing the client.</p>
+
+<table>
+<tr><th>Context</th><th>Use view</th><th>What the client sees for competitors</th></tr>
+<tr><td>Internal review</td><td><code>v_pitch_internal</code></td><td>Real names ("Dis-Chem", "Pick n Pay")</td></tr>
+<tr><td>Client-facing</td><td><code>v_pitch_external</code></td><td>"Competitor 1", "Market Leader", "Competitor 2"…</td></tr>
+</table>
+
+<div class="important"><strong>Don't mix.</strong> Every chart on a page should use the same one. If you put a <code>v_pitch_internal</code> table next to a <code>v_pitch_external</code> chart, you'll leak real names next to anonymised labels and it will be obvious.</div>
+
+<!-- ═══ POLISH ═══ -->
+<h2 id="polish">Polish checklist</h2>
+
+<ul class="checklist">
+<li>Report theme applied (Theme &amp; layout → dark / simple / custom)</li>
+<li>Page names short and all-caps or title-case (e.g. "CLIENT PITCH", not "client_pitch_page_final_v3")</li>
+<li>Global filters in the header of every page, visually aligned</li>
+<li>All currency fields formatted as ZAR with no decimals for values over R1,000</li>
+<li>Percent fields all formatted as <code>##.#%</code> with no raw decimals</li>
+<li>Tables sorted by the most relevant metric, not alphabetically</li>
+<li>Every page has a one-line description at the top ("Selected client's segment distribution…")</li>
+<li>No chart titled "Chart 1"</li>
+<li>File → Make a copy to create a client-specific snapshot when pitching</li>
+</ul>
+
+<h2>If anything breaks</h2>
+
+<table>
+<tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+<tr><td>Segments page shows identical numbers for every client</td><td>Chart bound to <code>mart_cluster_output</code> or <code>v_dashboard_segments</code></td><td>Rebind to <code>v_client_segment_mix</code></td></tr>
+<tr><td>Data source won't connect</td><td>View doesn't exist yet</td><td>Re-run <code>bash scripts/run.sh sandbox 6</code></td></tr>
+<tr><td>Client dropdown shows no clients</td><td>Dropdown bound to a view with no <code>DESTINATION</code> column</td><td>Rebind to <code>v_dashboard_client_pitch</code></td></tr>
+<tr><td>Audience overlap chart empty</td><td>Selected client × category below the 1,000-customer threshold</td><td>Expected — the mart filters low-volume clients. Pick a different client or category</td></tr>
+<tr><td>Huge BigQuery bill after a run</td><td>Someone ran <code>bash scripts/run.sh</code> with no args → full pipeline incl. ML</td><td>Always pass a step: <code>bash scripts/run.sh sandbox 4</code> for marts, <code>6</code> for views. Steps 1 and 3 are the expensive ones.</td></tr>
+</table>
+
+<p style="margin-top:40px;color:#64748b;font-size:.85rem">Prosper Sikhwari · v2 April 2026 · supersedes <code>looker_studio_build_guide.html</code>, <code>looker_guide_detailed.html</code>, <code>looker_guide_for_simphiwe.html</code></p>
+
+</div></body></html>
