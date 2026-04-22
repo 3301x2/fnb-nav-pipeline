@@ -8,7 +8,25 @@ and uploads them to the `fmn-sandbox` bucket.
 
 ---
 
-## One-time setup (Mac)
+## One-time setup (Mac) — the easy way
+
+Run this once, from Terminal, in this folder. The script installs Homebrew,
+the ODBC driver, the Google Cloud SDK, the Python packages, and walks you
+through the gcloud login. Safe to re-run — it skips steps already done.
+
+```bash
+cd retail_cdao
+bash setup_mac.sh
+```
+
+If anything fails, the script tells you exactly what to do next. Once it
+finishes cleanly, skip to **Every month after that** below.
+
+---
+
+## One-time setup (Mac) — the manual way
+
+Only follow this section if the script above failed on your machine.
 
 ### 1. ODBC driver for SQL Server
 
