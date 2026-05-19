@@ -59,8 +59,45 @@ for cmd in gcloud bq gsutil; do
     fi
 done
 
-ACTIVE_ACCT="$(gcloud config get-value account 2>/dev/null || echo '(none)')"
+ACTIVE_ACCT="$(gcloud config get-value account 2>/dev/null || echo '')"
+
+# If no active account or no valid token, walk the user through `gcloud auth login`.
+# This matches the rest of the repo (run.sh, cost_report.sh, check_and_grant.sh)
+# which all rely on user-account auth, not service-account keys.
+NEED_LOGIN=0
+if [ -z "$ACTIVE_ACCT" ] || [ "$ACTIVE_ACCT" = "(unset)" ]; then
+    warn "No active gcloud account."
+    NEED_LOGIN=1
+else
+    # Verify the cached token actually works
+    if ! gcloud auth print-access-token >/dev/null 2>&1; then
+        warn "Account $ACTIVE_ACCT has no valid access token (probably expired)."
+        NEED_LOGIN=1
+    fi
+fi
+
+if [ $NEED_LOGIN -eq 1 ]; then
+    echo
+    info "Opening a browser to log in. Sign in with your FNB Google account."
+    info "(This is the standard pattern for every script in this repo — same as 'gcloud auth login'.)"
+    echo
+    gcloud auth login --update-adc --quiet || {
+        fail "Login cancelled or failed. Re-run the script when ready."
+        exit 1
+    }
+    ACTIVE_ACCT="$(gcloud config get-value account 2>/dev/null || echo '(unknown)')"
+fi
+
+# Make sure the active project matches what we expect to query
+CUR_PROJECT="$(gcloud config get-value project 2>/dev/null || echo '')"
+if [ "$CUR_PROJECT" != "$PROJECT" ]; then
+    warn "gcloud default project is '$CUR_PROJECT', but we want '$PROJECT'."
+    info "Setting it to $PROJECT for this session..."
+    gcloud config set project "$PROJECT" 2>/dev/null || warn "Couldn't set project — bq/gsutil calls below will use --project_id flag anyway."
+fi
+
 ok "Active gcloud account: $ACTIVE_ACCT"
+ok "Active project: $PROJECT"
 echo
 
 # ── 2. GCS — list newest files in the bucket ────────────────────────────────
