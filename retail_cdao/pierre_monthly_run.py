@@ -41,15 +41,18 @@ LOG = logging.getLogger("pierre_monthly")
 
 # ── Defaults (override with env vars or CLI) ─────────────────────────────────
 DEFAULTS = {
-    "sftp_host":  "avalonwinscp.fnb.co.za",
-    "sftp_port":  "22",
-    "remote_dir": "/data/fnb/retail_sales_and_cdao/Pierre/",
-    "stem":       "burger",        # file stem; full name = <stem>_<YYYYMMDD>.csv
-    "out_dir":    "./out",         # local cache for CSV + parquet
-    "gcp_project":"fmn-sandbox",
-    "gcp_bucket": "customer_spend_data",
-    "chunksize":  "500000",        # rows per CSV chunk (matches Pierre's 500k)
-    "compression":"snappy",        # parquet compression
+    "sftp_host":   "avalonwinscp.fnb.co.za",
+    "sftp_port":   "22",
+    "remote_dir":  "/data/fnb/retail_sales_and_cdao/Pierre/",
+    "stem":        "burger",        # file stem; full name = <stem>_<YYYYMMDD>.csv
+    "out_dir":     "./out",         # local cache for CSV + parquet
+    "gcp_project": "fmn-sandbox",
+    "gcp_bucket":  "customer_spend_data",
+    # Test bucket — set TEST_BUCKET in env/.env to whatever Pierre created.
+    # Used when --test is passed (so the prod bucket isn't touched during smoke tests).
+    "test_bucket": "",              # e.g. "customer_spend_data_test"
+    "chunksize":   "500000",        # rows per CSV chunk (matches Pierre's 500k)
+    "compression": "snappy",        # parquet compression
 }
 
 # Columns we hash (PII). Found via inspect_source.sh — these are the three
@@ -267,6 +270,9 @@ def main(argv: list = None) -> int:
                         help=f"Remote SFTP folder (default: {DEFAULTS['remote_dir']})")
     parser.add_argument("--bucket", default=None,
                         help=f"GCS bucket (default: {DEFAULTS['gcp_bucket']})")
+    parser.add_argument("--test", action="store_true",
+                        help="Upload to the TEST bucket instead of prod. "
+                             "Set TEST_BUCKET in .env first.")
     parser.add_argument("--out-dir", default=None,
                         help=f"Local cache folder (default: {DEFAULTS['out_dir']})")
     parser.add_argument("--skip-upload", action="store_true",
@@ -287,8 +293,24 @@ def main(argv: list = None) -> int:
 
     stem       = args.stem       or _cfg("stem")
     remote_dir = args.remote_dir or _cfg("remote_dir")
-    bucket     = args.bucket     or _cfg("gcp_bucket")
     out_dir    = Path(args.out_dir or _cfg("out_dir")).expanduser()
+
+    # Bucket resolution priority:
+    #   --bucket flag   →   --test (uses TEST_BUCKET env)   →   default (prod)
+    if args.bucket:
+        bucket = args.bucket
+        if args.test:
+            LOG.warning("--bucket overrides --test; using %s", bucket)
+    elif args.test:
+        bucket = _cfg("test_bucket")
+        if not bucket:
+            LOG.error("--test passed but TEST_BUCKET env var is not set.")
+            LOG.error("Add this line to retail_cdao/.env :")
+            LOG.error("    TEST_BUCKET=customer_spend_data_test   # or whatever Pierre's test bucket is named")
+            sys.exit(1)
+        LOG.info("TEST MODE — uploading to test bucket: %s", bucket)
+    else:
+        bucket = _cfg("gcp_bucket")
 
     file_basename = f"{stem}_{args.stamp}"
     remote_path   = remote_dir.rstrip("/") + "/" + file_basename + ".csv"

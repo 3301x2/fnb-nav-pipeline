@@ -9,9 +9,13 @@
 #   4. Upload to gs://customer_spend_data/
 #
 # Usage:
-#   bash pierre_monthly_run.sh --stamp 20260512                  # this month
+#   bash pierre_monthly_run.sh --stamp 20260512                  # PROD bucket
+#   bash pierre_monthly_run.sh --stamp 20260512 --test           # TEST bucket (set TEST_BUCKET in .env first)
 #   bash pierre_monthly_run.sh --stamp 20260512 --stem ebucks    # different client
-#   bash pierre_monthly_run.sh --stamp 20260512 --skip-upload    # dry run
+#   bash pierre_monthly_run.sh --stamp 20260512 --skip-upload    # no upload at all
+#
+# First-time setup:
+#   cp .env.example .env       # then edit .env to add your AD password + test bucket name
 #
 # Prereqs:
 #   - VPN connected
