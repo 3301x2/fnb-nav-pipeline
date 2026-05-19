@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SQL Smoke Test — Instructions for Una</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#fafbfc;color:#1a202c;line-height:1.7;padding:20px}
+.ctn{max-width:780px;margin:0 auto}
+h1{font-size:2rem;font-weight:700;color:#0f172a;margin:40px 0 8px}
+h2{font-size:1.4rem;font-weight:700;color:#1e3a5f;margin:32px 0 8px;padding-top:20px;border-top:1px solid #e2e8f0}
+h3{font-size:1.05rem;font-weight:600;color:#0f172a;margin:20px 0 6px}
+p{margin:8px 0;color:#374151}
+.lead{font-size:1.05rem;color:#475569;margin:12px 0 24px}
+.step{background:#fff;border-radius:12px;padding:20px 24px;margin:16px 0;border:1px solid #f1f5f9;counter-increment:step}
+.step::before{content:"Step " counter(step);display:block;font-size:.75rem;font-weight:600;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.step h4{font-size:1.05rem;font-weight:600;margin-bottom:6px}
+.step p{font-size:.95rem}
+.sec{counter-reset:step}
+code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.85rem;color:#0f172a}
+pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:14px 18px;margin:10px 0;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:.85rem;line-height:1.5}
+.warn{background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.92rem}
+.tip{background:#f0fdf4;border-left:4px solid #22c55e;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.92rem}
+.important{background:#fef2f2;border-left:4px solid #ef4444;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:.92rem}
+.kbd{display:inline-block;background:#0f172a;color:#fff;padding:2px 8px;border-radius:4px;font-size:.78rem;font-family:'JetBrains Mono',monospace;font-weight:500;vertical-align:middle}
+ul{margin:8px 0 8px 22px}
+ul li{margin:4px 0;color:#374151;font-size:.95rem}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.88rem}
+th{background:#0f172a;color:white;padding:8px 12px;text-align:left;font-size:.78rem}
+td{padding:8px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.faq dt{font-weight:600;color:#0f172a;margin-top:14px;font-size:.95rem}
+.faq dd{margin:4px 0 8px 0;color:#475569;font-size:.92rem}
+.footer{margin-top:40px;padding-top:20px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:.82rem;text-align:center}
+.checklist{list-style:none;padding:0;margin:8px 0}
+.checklist li{padding:6px 0 6px 28px;position:relative;font-size:.95rem;color:#374151}
+.checklist li::before{content:"☐";position:absolute;left:0;font-size:1.1rem;color:#64748b}
+</style>
+</head><body>
+<div class="ctn">
+
+<h1>Hi Una — quick SQL connection test</h1>
+<p class="lead">~5 minutes. We just need to confirm your VDI can talk to the SQL Server box from Python. Nothing else for now. Once this works, we'll do the real pipeline.</p>
+
+<div class="important"><strong>Do this on your Windows VDI</strong> — not on the Mac side of your machine.</div>
+
+<h2>What you'll do</h2>
+<ol style="margin-left:22px;color:#374151">
+  <li>Unzip the folder I sent.</li>
+  <li>Open one notebook in Jupyter.</li>
+  <li>Run the cells top to bottom.</li>
+  <li>Send me a screenshot of the result.</li>
+</ol>
+
+<h2>Step-by-step</h2>
+
+<div class="sec">
+
+<div class="step"><h4>Get the files</h4>
+<p>I sent you a zip. Unzip it anywhere on the VDI — Desktop is fine. You'll get a folder called <code>retail_cdao</code>.</p>
+<p>The only file you need from it is <strong><code>sql_smoke_test.ipynb</code></strong>. Ignore everything else for now.</p>
+</div>
+
+<div class="step"><h4>Open Jupyter on the VDI</h4>
+<p>However you normally open Jupyter:</p>
+<ul>
+  <li>Anaconda Navigator → <strong>Launch</strong> next to Jupyter Notebook, <strong>or</strong></li>
+  <li>Open Anaconda Prompt → type <code>jupyter notebook</code> → press Enter</li>
+</ul>
+<p>A browser tab opens with a file browser.</p>
+</div>
+
+<div class="step"><h4>Open the smoke test notebook</h4>
+<p>In the Jupyter file browser, navigate into the <code>retail_cdao</code> folder you unzipped and click <strong><code>sql_smoke_test.ipynb</code></strong>.</p>
+<div class="warn"><strong>Make sure it's <code>sql_smoke_test.ipynb</code></strong> — not <code>retail_cdao_upload.ipynb</code>. Wrong file = different test.</div>
+</div>
+
+<div class="step"><h4>Run the cells one at a time</h4>
+<p>Click into the first cell. Press <span class="kbd">Shift</span> + <span class="kbd">Enter</span> to run it and move to the next.</p>
+<p>Do this all the way down the notebook. <strong>Don't skip cells. Don't change any code.</strong></p>
+<p>The notebook checks everything itself — each cell prints either:</p>
+<ul>
+  <li><strong>✅</strong> with "NEXT: run Cell X" → carry on, or</li>
+  <li><strong>❌</strong> with exactly what to do → follow that instruction.</li>
+</ul>
+</div>
+
+<div class="step"><h4>One manual action — restart the kernel after Cell 1</h4>
+<p>This is the only thing the notebook can't do for itself. After Cell 1 finishes, go to the top menu and click:</p>
+<pre>Kernel → Restart</pre>
+<p>Then come back and run Cell 2.</p>
+<div class="important"><strong>If you skip this</strong>, Cell 2 will fail with <code>No module named pyodbc</code>. The notebook reminds you, but it's worth knowing in advance.</div>
+</div>
+
+<div class="step"><h4>Send me the result</h4>
+<p>If everything passed, the last cell prints <strong>✅ ✅ ✅ ALL CHECKS PASSED</strong> and shows you a small data preview.</p>
+<p>Take a screenshot of:</p>
+<ul class="checklist">
+  <li>Cell 5 (the connection confirmation), and</li>
+  <li>Cell 6 (the table list and preview)</li>
+</ul>
+<p>Send the screenshot to me on Teams.</p>
+<div class="tip"><strong>If any cell printed ❌</strong>, take a screenshot of <em>that cell</em> (including the red error text) and send it to me. Don't try to fix it yourself — we'll work it out together.</div>
+</div>
+
+</div>
+
+<h2>Common questions</h2>
+
+<dl class="faq">
+  <dt>Do I need to install anything before opening the notebook?</dt>
+  <dd>No — the notebook's first cell installs the two packages it needs (<code>pyodbc</code>, <code>pandas</code>). Just open it and start running cells.</dd>
+
+  <dt>Do I need a password?</dt>
+  <dd>No. The notebook uses your Windows login automatically (<code>Trusted_Connection=yes</code>). If a cell ever asks you for a password, stop — that's a bug, screenshot and send to me.</dd>
+
+  <dt>Does this need VPN?</dt>
+  <dd>No — you're already on the VDI, so the VDI is inside the network.</dd>
+
+  <dt>How long should this take?</dt>
+  <dd>2–5 minutes including the kernel restart. If you've been at it for 15 minutes, stop and message me on Teams.</dd>
+
+  <dt>Can I edit the code if something looks off?</dt>
+  <dd>Please don't — the code is deliberately simple so we know exactly what's being tested. If anything's wrong, the notebook will say so itself.</dd>
+
+  <dt>The cell ran but nothing seems to have happened.</dt>
+  <dd>Look for <code>In [*]</code> on the left of the cell — that means it's still running. Wait. If it's been more than 30 seconds and nothing's printed, screenshot and send.</dd>
+</dl>
+
+<h2>What success looks like</h2>
+
+<p>At the end, you'll see something like this:</p>
+
+<pre>════════════════════════════════════════════════════════════
+✅ ✅ ✅  ALL CHECKS PASSED
+
+Next steps:
+  1. Screenshot Cells 5 and 6 (connection + table preview).
+  2. Send the screenshot to Prosper on Teams.
+  3. We move on to the real pipeline notebook.
+════════════════════════════════════════════════════════════</pre>
+
+<p>That's the only thing I need from you today. Thanks Una.</p>
+
+<div class="footer">Prosper · April 2026 · retail_cdao / sql_smoke_test</div>
+
+</div></body></html>
