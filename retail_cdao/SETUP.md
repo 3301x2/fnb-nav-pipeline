@@ -1,6 +1,48 @@
 # Setup instructions for the people you're handing this to
 
-Two paths — pick whichever matches their machine. Copy the blockquote and paste.
+Pick the path that matches the recipient. Copy the blockquote and paste.
+
+---
+
+## Path C — VDI smoke test (paste to Una)
+
+> Hi Una — small task, ~5 minutes. We just want to confirm the VDI can talk to the SQL Server box from Python. Nothing else. Once this works, we move on.
+>
+> **What you'll do:** open one notebook on your VDI, run 6 cells top to bottom, screenshot the output, send to me.
+>
+> ### Step-by-step
+>
+> 1. I'm sending you a zip. Unzip it anywhere (Desktop is fine). Inside you'll find a folder called `retail_cdao`.
+>
+> 2. Open Jupyter on the VDI the way you normally do (Anaconda Navigator → Launch Jupyter Notebook, or `jupyter notebook` from a terminal — whichever you usually use).
+>
+> 3. In Jupyter, navigate into the `retail_cdao` folder and open the file called `sql_smoke_test.ipynb`. **Not** `retail_cdao_upload.ipynb` — we'll do that one later.
+>
+> 4. Read the markdown at the top, then run the cells one at a time using **Shift + Enter**. Don't skip any. Don't change any code.
+>
+>    - **Step 1 cell** installs `pyodbc` and `pandas` (it's fine if they're already installed).
+>    - **After Step 1**, go to the top menu and click **Kernel → Restart**. Important — without this, Step 3 will fail.
+>    - Continue from **Step 3** onwards, one cell at a time.
+>
+> 5. The last cell ("Step 6") should show you a row count and the first 5 rows of a `BASE` table.
+>
+> 6. Take **one screenshot** of Steps 4, 5, and 6 (the connection confirmation, the table list, and the preview) and send it to me on Teams.
+>
+> ### If something goes wrong
+>
+> If any cell shows a red error, **stop immediately** and:
+> - Don't restart the notebook from scratch.
+> - Don't try to "fix" the code — it's deliberately simple.
+> - Screenshot the failing cell (including the red error text) and send to me.
+>
+> Common errors and what they mean (just so you know — but don't try to fix them yourself, send the screenshot first):
+>
+> - **"No module named pyodbc"** → you skipped Kernel → Restart after Step 1.
+> - **"Login failed"** → your Windows account doesn't have SQL access yet. Not your fault — we'll sort it.
+> - **"Login timeout expired"** → SQL box isn't reachable from this VDI. We'll investigate.
+> - **"NONE found" in Step 3** → ODBC driver missing on the VDI. We'll ask IT to install.
+>
+> Thanks Una — this is the only step I need from you today.
 
 ---
 
