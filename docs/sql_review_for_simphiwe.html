@@ -46,7 +46,7 @@ td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
 <div class="c">
 
 <h1>SQL Review — VOX Audience Script</h1>
-<p>Hey Simphiwe — read this top to bottom. The good news, then the one big rethink, then the rewrite using the marts we built so you stop scanning 3.6 billion rows.</p>
+<p>Hey Simphiwe — read this top to bottom. The good news, then the one big rethink, then the rewrite using the marts we built so you stop scanning a couple of billion rows.</p>
 
 <nav>
 <a href="#good">What's good</a>
@@ -89,7 +89,7 @@ You're profiling an audience the right way: size → spend → demographics → 
 
 <div class="do"><h4><span class="num bad-num">1</span>You went straight for <code>int_customer_category_spend</code></h4>
 
-<p>That table is huge — about <b>3.6 billion rows</b>. Every query you wrote against it scans it again. The whole reason I built the <code>marts.*</code> tables was so you don't have to.</p>
+<p>That table is huge — in the billions of rows (run <code>SELECT COUNT(*)</code> to see the exact number for your project). Every query you wrote against it scans it again. The whole reason I built the <code>marts.*</code> tables was so you don't have to.</p>
 
 <p>Here's the mapping — for what you were trying to ask, the right mart for each:</p>
 
@@ -171,7 +171,7 @@ You're profiling an audience the right way: size → spend → demographics → 
 <span class="kw">ORDER BY</span> spend_rank;</pre>
 
 <div class="tip">
-<b>Bytes processed:</b> <span class="bytes">&lt; 1 MB</span>. This is the table I built for exactly this question.
+<b>Bytes processed:</b> tiny — single-digit MB at most. This is the table I built for exactly this question. Check the "bytes processed" estimate next to the Run button to confirm.
 </div>
 </div>
 
@@ -299,7 +299,7 @@ Notice the two-line exclusion: <code>DESTINATION != 'VOX'</code> excludes VOX it
 <div class="tip">
 <b>Three things to take away:</b><br><br>
 1. <b>VOX = the client.</b> The competitive set isn't part of the audience — it's what you compare against. Don't union them into the audience definition.<br><br>
-2. <b>Use the marts.</b> <code>mart_destination_benchmarks</code>, <code>mart_demographic_summary</code>, <code>mart_client_segment_mix</code> answer 80% of pitch questions without ever touching the 3.6B-row table. That's why they exist.<br><br>
+2. <b>Use the marts.</b> <code>mart_destination_benchmarks</code>, <code>mart_demographic_summary</code>, <code>mart_client_segment_mix</code> answer 80% of pitch questions without ever touching the billion-row table. That's why they exist.<br><br>
 3. <b>When you do need the raw table</b>, scope the scan with a CTE first (pick the customer set, then join). Don't scan-and-filter — filter-then-scan.<br><br>
 Your shape is right, your instinct to attach demographics + segments is right. The fixes are just about which tables to reach for and how to define the question. Hit me back if anything's unclear.
 </div>
