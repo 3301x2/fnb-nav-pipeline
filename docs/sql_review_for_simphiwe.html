@@ -89,7 +89,7 @@ You're profiling an audience the right way: size → spend → demographics → 
 
 <div class="do"><h4><span class="num bad-num">1</span>You went straight for <code>int_customer_category_spend</code></h4>
 
-<p>That table is huge — in the billions of rows (run <code>SELECT COUNT(*)</code> to see the exact number for your project). Every query you wrote against it scans it again. The whole reason I built the <code>marts.*</code> tables was so you don't have to.</p>
+<p>That table is huge — ~213 million rows. Every query you wrote against it scans it again. The whole reason I built the <code>marts.*</code> tables was so you don't have to.</p>
 
 <p>Here's the mapping — for what you were trying to ask, the right mart for each:</p>
 
@@ -161,11 +161,13 @@ You're profiling an audience the right way: size → spend → demographics → 
     penetration_pct,
     spend_rank
 <span class="kw">FROM</span> `fmn-sandbox.marts.mart_destination_benchmarks`
-<span class="kw">WHERE</span> CATEGORY_TWO = <span class="str">'Internet &amp; Data'</span>   <span class="com">-- check the exact spelling in the data</span>
+<span class="kw">WHERE</span> CATEGORY_TWO = <span class="str">'Internet'</span>   <span class="com">-- check the exact spelling in the data</span>
   <span class="kw">AND</span> DESTINATION <span class="kw">IN</span> (
-    <span class="str">'VOX'</span>, <span class="str">'AFRIHOST'</span>, <span class="str">'3 NET NINE NINE'</span>, <span class="str">'ZA DOMAINS'</span>, <span class="str">'AXXESS'</span>,
-    <span class="str">'COOL IDEAS'</span>, <span class="str">'MWEB'</span>, <span class="str">'TELKOM'</span>, <span class="str">'EXACTTA GROUP SRL'</span>, <span class="str">'VUMATEL'</span>,
-    <span class="str">'G CONNECT'</span>, <span class="str">'ACCELERIT TECHNOLOGIES'</span>, <span class="str">'RAIN (DATA)'</span>, <span class="str">'IKEJA'</span>,
+    <span class="com">-- The 16-brand list from your script, minus the two that don't exist in the data</span>
+    <span class="com">-- (3 NET NINE NINE and ZA DOMAINS returned 0 customers — check spelling with Prosper)</span>
+    <span class="str">'VOX'</span>, <span class="str">'AFRIHOST'</span>, <span class="str">'AXXESS'</span>, <span class="str">'COOL IDEAS'</span>, <span class="str">'MWEB'</span>,
+    <span class="str">'TELKOM'</span>, <span class="str">'EXACTTA GROUP SRL'</span>, <span class="str">'VUMATEL'</span>, <span class="str">'G CONNECT'</span>,
+    <span class="str">'ACCELERIT TECHNOLOGIES'</span>, <span class="str">'RAIN (DATA)'</span>, <span class="str">'IKEJA'</span>,
     <span class="str">'WEB AFRICA'</span>, <span class="str">'SUPERSONIC'</span>
   )
 <span class="kw">ORDER BY</span> spend_rank;</pre>
@@ -186,7 +188,7 @@ You're profiling an audience the right way: size → spend → demographics → 
     total_spend,
     avg_spend_per_customer
 <span class="kw">FROM</span> `fmn-sandbox.marts.mart_demographic_summary`
-<span class="kw">WHERE</span> CATEGORY_TWO = <span class="str">'Internet &amp; Data'</span>
+<span class="kw">WHERE</span> CATEGORY_TWO = <span class="str">'Internet'</span>
 <span class="kw">ORDER BY</span> customers <span class="kw">DESC</span>;</pre>
 
 <div class="warn">
@@ -216,7 +218,7 @@ You're profiling an audience the right way: size → spend → demographics → 
 <span class="kw">ORDER BY</span> customers <span class="kw">DESC</span>;</pre>
 
 <div class="tip">
-The table is clustered by <code>CATEGORY_TWO + DESTINATION</code>. When you filter <code>WHERE DESTINATION = 'VOX'</code>, BigQuery only scans the VOX cluster — typically a few hundred MB out of 3.6B rows, not the whole thing. Clustering is the bit that makes filtering on the indexed columns cheap.
+The table is clustered by <code>CATEGORY_TWO + DESTINATION</code>, which helps when you filter directly. <b>Heads up:</b> when you use a CTE that filters and then join out to <code>stg_customers</code>, the engine sometimes can't fully prune the scan — a dry-run of this query against ~213M rows showed ~10 GB processed. That's still cheaper than the 5-query version you had, but it's not free. Always check the "Bytes processed" estimate before pressing Run.
 </div>
 </div>
 
@@ -256,13 +258,13 @@ The table is clustered by <code>CATEGORY_TWO + DESTINATION</code>. When you filt
 <span class="kw">JOIN</span> `fmn-sandbox.analytics.int_customer_category_spend` cs
     <span class="kw">ON</span> v.UNIQUE_ID = cs.UNIQUE_ID
 <span class="kw">WHERE</span> cs.DESTINATION != <span class="str">'VOX'</span>             <span class="com">-- exclude VOX itself (we know they shop there)</span>
-  <span class="kw">AND</span> cs.CATEGORY_TWO != <span class="str">'Internet &amp; Data'</span>  <span class="com">-- exclude all internet brands</span>
+  <span class="kw">AND</span> cs.CATEGORY_TWO != <span class="str">'Internet'</span>  <span class="com">-- exclude all internet brands</span>
 <span class="kw">GROUP BY</span> cs.CATEGORY_TWO, cs.DESTINATION
 <span class="kw">ORDER BY</span> vox_spend <span class="kw">DESC</span>
 <span class="kw">LIMIT</span> 50;</pre>
 
 <div class="tip">
-Notice the two-line exclusion: <code>DESTINATION != 'VOX'</code> excludes VOX itself, and <code>CATEGORY_TWO != 'Internet &amp; Data'</code> excludes the whole competitive set in one shot — no giant <code>NOT IN</code> list. This is cleaner than naming all 16 brands.
+Notice the two-line exclusion: <code>DESTINATION != 'VOX'</code> excludes VOX itself, and <code>CATEGORY_TWO != 'Internet'</code> excludes the whole competitive set in one shot — no giant <code>NOT IN</code> list. This is cleaner than naming all 16 brands.
 </div>
 </div>
 
@@ -283,7 +285,7 @@ Notice the two-line exclusion: <code>DESTINATION != 'VOX'</code> excludes VOX it
 </div>
 
 <div class="score">
-<b>3. Clustering > filtering > scanning.</b> When a table is clustered by a column (like <code>DESTINATION</code> on <code>int_customer_category_spend</code>), a <code>WHERE</code> on that column only reads the relevant clusters. So <code>WHERE DESTINATION = 'VOX'</code> is cheap; <code>WHERE estimated_income &gt; 50000</code> on its own is expensive (not clustered on income). Filter on clustered columns first.
+<b>3. Clustering helps, but check the dry-run.</b> When a table is clustered (like <code>int_customer_category_spend</code> is, by <code>CATEGORY_TWO + DESTINATION</code>), filtering on those columns is usually cheaper than filtering on something else. But complex queries with CTEs and joins don't always benefit — BigQuery sometimes can't prove which clusters it can skip. Always look at "Bytes processed" next to the Run button before you actually run the query. If it's huge, restructure.
 </div>
 
 <div class="score">
@@ -291,7 +293,7 @@ Notice the two-line exclusion: <code>DESTINATION != 'VOX'</code> excludes VOX it
 </div>
 
 <div class="score">
-<b>5. Look at "bytes processed" before you run.</b> BigQuery shows it next to the Run button. If you're at hundreds of MB or more for a single audience profile, you're scanning something you didn't need to.
+<b>5. Look at "bytes processed" before you run — this is the actual safety rail.</b> BigQuery shows it next to the Run button. Mart queries should be sub-100 MB. Customer-level queries that join out to <code>stg_customers</code> can creep into single-digit GB. If you see double-digit GB you're definitely scanning something you didn't need to — pause and rethink before pressing Run.
 </div>
 
 <h2>Summary</h2>
@@ -299,7 +301,7 @@ Notice the two-line exclusion: <code>DESTINATION != 'VOX'</code> excludes VOX it
 <div class="tip">
 <b>Three things to take away:</b><br><br>
 1. <b>VOX = the client.</b> The competitive set isn't part of the audience — it's what you compare against. Don't union them into the audience definition.<br><br>
-2. <b>Use the marts.</b> <code>mart_destination_benchmarks</code>, <code>mart_demographic_summary</code>, <code>mart_client_segment_mix</code> answer 80% of pitch questions without ever touching the billion-row table. That's why they exist.<br><br>
+2. <b>Use the marts.</b> <code>mart_destination_benchmarks</code>, <code>mart_demographic_summary</code>, <code>mart_client_segment_mix</code> answer 80% of pitch questions without ever touching the large fact table. That's why they exist.<br><br>
 3. <b>When you do need the raw table</b>, scope the scan with a CTE first (pick the customer set, then join). Don't scan-and-filter — filter-then-scan.<br><br>
 Your shape is right, your instinct to attach demographics + segments is right. The fixes are just about which tables to reach for and how to define the question. Hit me back if anything's unclear.
 </div>
