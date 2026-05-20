@@ -1,9 +1,9 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Pierre's monthly run — one command, end-to-end.
+# Monthly run — one command, end-to-end.
 #
-# Replaces the manual notebook with:
-#   1. SFTP the monthly CSV from avalonwinscp
+# What this does:
+#   1. SFTP your monthly CSV from avalonwinscp
 #   2. Hash PII (cust_id_reg_no, EMAIL_ADDR, CUST_CELL_NO)
 #   3. CSV → Parquet (chunked, memory-safe)
 #   4. Upload to gs://customer_spend_data/
@@ -11,17 +11,17 @@
 # Usage:
 #   bash pierre_monthly_run.sh --stamp 20260512                  # PROD bucket
 #   bash pierre_monthly_run.sh --stamp 20260512 --test           # TEST bucket (set TEST_BUCKET in .env first)
-#   bash pierre_monthly_run.sh --stamp 20260512 --stem ebucks    # different client
+#   bash pierre_monthly_run.sh --stamp 20260512 --stem ebucks    # different client stem
 #   bash pierre_monthly_run.sh --stamp 20260512 --skip-upload    # no upload at all
 #
 # First-time setup:
-#   cp .env.example .env       # then edit .env to add your AD password + test bucket name
+#   cp .env.example .env       # then edit .env with your AD password + test bucket name
 #
-# Prereqs:
+# Prerequisites on this machine:
 #   - VPN connected
 #   - Python 3 available
 #   - gcloud auth application-default login  (one-time)
-#   - AD_USERNAME + AD_PASSWORD in env or .env  (or you'll be prompted)
+#   - AD_USERNAME + AD_PASSWORD in env or .env  (otherwise the script will prompt)
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail

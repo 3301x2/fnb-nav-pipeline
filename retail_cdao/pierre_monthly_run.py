@@ -1,21 +1,20 @@
 """
-pierre_monthly_run.py — replaces Pierre's manual monthly notebook.
+pierre_monthly_run.py — automates the monthly retail_cdao run.
 
 Does end-to-end:
-  1. SFTP the monthly CSV from avalonwinscp.fnb.co.za
+  1. SFTP your monthly CSV from avalonwinscp.fnb.co.za
   2. Hash the PII columns (cust_id_reg_no, EMAIL_ADDR, CUST_CELL_NO) with SHA-256
   3. Convert CSV -> Parquet in chunks (memory-flat on any laptop)
   4. Upload the parquet to gs://customer_spend_data/
 
-Defaults match what Pierre's been doing manually. Override with CLI flags
-or environment variables.
+Override defaults with CLI flags or environment variables.
 
 Run via the wrapper:  bash pierre_monthly_run.sh --stamp 20260512
 Or directly:          python3 pierre_monthly_run.py --stamp 20260512
 
 Required env / .env:
-  AD_USERNAME            FNB AD username (e.g. f3799182)
-  AD_PASSWORD            FNB AD password   (or DOMAIN_PW — Pierre's legacy name)
+  AD_USERNAME            Your FNB AD username (e.g. f3799182)
+  AD_PASSWORD            Your FNB AD password   (DOMAIN_PW is also accepted)
 
 Optional env:
   SFTP_HOST              default: avalonwinscp.fnb.co.za
@@ -23,6 +22,7 @@ Optional env:
   STEM                   default: burger
   GCP_PROJECT            default: fmn-sandbox
   GCP_BUCKET             default: customer_spend_data
+  TEST_BUCKET            set this to your test bucket name, then pass --test
 """
 
 from __future__ import annotations
@@ -48,15 +48,15 @@ DEFAULTS = {
     "out_dir":     "./out",         # local cache for CSV + parquet
     "gcp_project": "fmn-sandbox",
     "gcp_bucket":  "customer_spend_data",
-    # Test bucket — set TEST_BUCKET in env/.env to whatever Pierre created.
+    # Test bucket — set TEST_BUCKET in env/.env to your test bucket name.
     # Used when --test is passed (so the prod bucket isn't touched during smoke tests).
     "test_bucket": "",              # e.g. "customer_spend_data_test"
-    "chunksize":   "500000",        # rows per CSV chunk (matches Pierre's 500k)
+    "chunksize":   "500000",        # rows per CSV chunk
     "compression": "snappy",        # parquet compression
 }
 
-# Columns we hash (PII). Found via inspect_source.sh — these are the three
-# string columns in customer_spend.base_data + cust_id_reg_no from Pierre's flow.
+# Columns we hash (PII). These are the three string columns in
+# customer_spend.base_data + cust_id_reg_no from the SAS export.
 HASH_COLUMNS = ["cust_id_reg_no", "EMAIL_ADDR", "CUST_CELL_NO"]
 
 # Types we enforce per chunk so the parquet schema matches what BigQuery expects.
