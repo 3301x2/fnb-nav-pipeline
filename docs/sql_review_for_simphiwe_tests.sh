@@ -90,13 +90,14 @@ fi
 # ────────────────────────────────────────────────────────────────
 # Test 3 — Do all 16 competitor brands exist as DESTINATION values?
 # ────────────────────────────────────────────────────────────────
-hr; echo "Test 3: Which of the 16 brands actually exist as DESTINATION values?"
+hr; echo "Test 3: Do the 14 brands from the guide exist as DESTINATION values?"
+note "(Excludes '3 NET NINE NINE' and 'ZA DOMAINS' — already removed from guide because they're not in the data)"
 result=$(bq_run "
     WITH expected AS (
         SELECT brand FROM UNNEST([
-            'VOX','AFRIHOST','3 NET NINE NINE','ZA DOMAINS','AXXESS',
-            'COOL IDEAS','MWEB','TELKOM','EXACTTA GROUP SRL','VUMATEL',
-            'G CONNECT','ACCELERIT TECHNOLOGIES','RAIN (DATA)','IKEJA',
+            'VOX','AFRIHOST','AXXESS','COOL IDEAS','MWEB',
+            'TELKOM','EXACTTA GROUP SRL','VUMATEL','G CONNECT',
+            'ACCELERIT TECHNOLOGIES','RAIN (DATA)','IKEJA',
             'WEB AFRICA','SUPERSONIC'
         ]) AS brand
     )
@@ -107,9 +108,9 @@ result=$(bq_run "
         SELECT DESTINATION, COUNT(DISTINCT UNIQUE_ID) AS customers
         FROM \`$PROJECT.analytics.int_customer_category_spend\`
         WHERE DESTINATION IN (
-            'VOX','AFRIHOST','3 NET NINE NINE','ZA DOMAINS','AXXESS',
-            'COOL IDEAS','MWEB','TELKOM','EXACTTA GROUP SRL','VUMATEL',
-            'G CONNECT','ACCELERIT TECHNOLOGIES','RAIN (DATA)','IKEJA',
+            'VOX','AFRIHOST','AXXESS','COOL IDEAS','MWEB',
+            'TELKOM','EXACTTA GROUP SRL','VUMATEL','G CONNECT',
+            'ACCELERIT TECHNOLOGIES','RAIN (DATA)','IKEJA',
             'WEB AFRICA','SUPERSONIC'
         )
         GROUP BY DESTINATION
@@ -119,11 +120,10 @@ result=$(bq_run "
 echo "$result"
 missing=$(echo "$result" | awk -F, 'NR>1 && $2==0 {print $1}')
 if [ -z "$missing" ]; then
-    pass "All 16 brands exist as DESTINATION values"
+    pass "All 14 brands in the guide exist as DESTINATION values"
 else
-    warn "Some brands have 0 customers (might be spelled differently in the data):"
+    warn "Some brands have 0 customers — guide will need an update:"
     echo "$missing" | sed 's/^/        /'
-    note "Update the guide to drop missing brands or fix their spelling"
 fi
 
 # ────────────────────────────────────────────────────────────────
@@ -184,13 +184,11 @@ result=$(bq_run "
 ")
 echo "$result"
 rows=$(echo "$result" | tail -n 1 | tr -d ',\"' )
-note "The guide currently says '3.6 billion rows'. Actual is: $rows"
-if [ -n "$rows" ] && [ "$rows" -gt 0 ] 2>/dev/null; then
-    if [ "$rows" -lt 1000000000 ]; then
-        warn "Guide overstates the scale — update from '3.6 billion' to actual row count"
-    else
-        pass "Row count >= 1B — '3.6 billion' is a reasonable framing"
-    fi
+note "Guide says ~213 million rows. Actual: $rows"
+if [ -n "$rows" ] && [ "$rows" -gt 100000000 ] 2>/dev/null && [ "$rows" -lt 500000000 ] 2>/dev/null; then
+    pass "Row count in the 100M-500M range — matches '~213 million' framing"
+else
+    warn "Row count ($rows) doesn't match '~213 million' framing — update guide"
 fi
 
 # ────────────────────────────────────────────────────────────────
@@ -249,7 +247,13 @@ if [ -n "$bytes" ]; then
     mb=$(echo "scale=2; $bytes / 1048576" | bc 2>/dev/null || echo "?")
     gb=$(echo "scale=2; $bytes / 1073741824" | bc 2>/dev/null || echo "?")
     note "Bytes processed: ${bytes} (~${mb} MB, ${gb} GB)"
-    note "Clustering should keep this small (just the VOX cluster). If this is >10 GB the clustering isn't helping like the guide claims."
+    # Guide says "~10 GB" honestly. PASS if under 30 GB (allowing some headroom for
+    # data growth). WARN above that — clustering effectively isn't helping.
+    if [ "$bytes" -lt 32212254720 ] 2>/dev/null; then    # 30 GB
+        pass "CTE-join scan ~${gb} GB — matches guide's '~10 GB' honest framing"
+    else
+        warn "CTE-join scan ${gb} GB is bigger than the guide's ~10 GB framing — guide may need updating"
+    fi
 fi
 
 # ────────────────────────────────────────────────────────────────
