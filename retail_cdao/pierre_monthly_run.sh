@@ -8,13 +8,20 @@
 #   3. CSV → Parquet (chunked, memory-safe)
 #   4. Upload to gs://customer_spend_data/
 #
-# Usage:
-#   bash pierre_monthly_run.sh --stamp 20260512                  # PROD bucket
-#   bash pierre_monthly_run.sh --stamp 20260512 --test           # TEST bucket (set TEST_BUCKET in .env first)
-#   bash pierre_monthly_run.sh --stamp 20260512 --stem ebucks    # different client stem
-#   bash pierre_monthly_run.sh --stamp 20260512 --skip-upload    # no upload at all
+# Easy mode (if TEST_BUCKET is set in .env, this defaults to test — safe):
+#   bash pierre_monthly_run.sh                       # today's date, test bucket
+#   bash pierre_monthly_run.sh --prod                # today's date, PROD bucket
 #
-# First-time setup:
+# Specific date:
+#   bash pierre_monthly_run.sh --stamp 20260512
+#   bash pierre_monthly_run.sh --stamp 20260512 --prod
+#
+# Other options:
+#   bash pierre_monthly_run.sh --stem ebucks         # different client stem
+#   bash pierre_monthly_run.sh --skip-upload         # no upload at all (local only)
+#   bash pierre_monthly_run.sh --yes                 # skip the "Proceed?" prompt
+#
+# First-time setup (do once):
 #   cp .env.example .env       # then edit .env with your AD password + test bucket name
 #
 # Prerequisites on this machine:

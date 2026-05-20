@@ -262,8 +262,8 @@ def main(argv: list = None) -> int:
     parser = argparse.ArgumentParser(
         description="Monthly retail_cdao run — SFTP, hash, parquet, upload."
     )
-    parser.add_argument("--stamp", required=True,
-                        help="YYYYMMDD date stamp, e.g. 20260512")
+    parser.add_argument("--stamp", default=None,
+                        help="YYYYMMDD date stamp (default: today's date)")
     parser.add_argument("--stem", default=None,
                         help=f"File stem (default: {DEFAULTS['stem']})")
     parser.add_argument("--remote-dir", default=None,
@@ -271,8 +271,11 @@ def main(argv: list = None) -> int:
     parser.add_argument("--bucket", default=None,
                         help=f"GCS bucket (default: {DEFAULTS['gcp_bucket']})")
     parser.add_argument("--test", action="store_true",
-                        help="Upload to the TEST bucket instead of prod. "
-                             "Set TEST_BUCKET in .env first.")
+                        help="Upload to TEST bucket (default if TEST_BUCKET is set and --prod not used)")
+    parser.add_argument("--prod", action="store_true",
+                        help="Force upload to PROD bucket (override safe default)")
+    parser.add_argument("-y", "--yes", action="store_true",
+                        help="Skip the confirmation prompt before uploading")
     parser.add_argument("--out-dir", default=None,
                         help=f"Local cache folder (default: {DEFAULTS['out_dir']})")
     parser.add_argument("--skip-upload", action="store_true",
@@ -291,39 +294,74 @@ def main(argv: list = None) -> int:
 
     _die_on_missing_deps()
 
+    # Default stamp = today's date (YYYYMMDD)
+    if not args.stamp:
+        args.stamp = time.strftime("%Y%m%d")
+        LOG.info("No --stamp given; using today's date: %s", args.stamp)
+
     stem       = args.stem       or _cfg("stem")
     remote_dir = args.remote_dir or _cfg("remote_dir")
     out_dir    = Path(args.out_dir or _cfg("out_dir")).expanduser()
 
-    # Bucket resolution priority:
-    #   --bucket flag   →   --test (uses TEST_BUCKET env)   →   default (prod)
+    # Bucket resolution priority (safety-first):
+    #   --bucket flag           → that exact bucket, always wins
+    #   --prod                  → prod bucket explicitly
+    #   --test                  → test bucket
+    #   TEST_BUCKET in .env     → test bucket (SAFE DEFAULT — won't touch prod)
+    #   nothing set             → prod bucket
+    test_bucket = _cfg("test_bucket")
+
     if args.bucket:
         bucket = args.bucket
-        if args.test:
-            LOG.warning("--bucket overrides --test; using %s", bucket)
+        bucket_label = f"CUSTOM: {bucket}"
+    elif args.prod:
+        bucket = _cfg("gcp_bucket")
+        bucket_label = f"PROD: {bucket}"
     elif args.test:
-        bucket = _cfg("test_bucket")
-        if not bucket:
-            LOG.error("--test passed but TEST_BUCKET env var is not set.")
-            LOG.error("Add this line to retail_cdao/.env :")
-            LOG.error("    TEST_BUCKET=customer_spend_data_test   # or whatever Pierre's test bucket is named")
+        if not test_bucket:
+            LOG.error("--test passed but TEST_BUCKET is not set in .env.")
             sys.exit(1)
-        LOG.info("TEST MODE — uploading to test bucket: %s", bucket)
+        bucket = test_bucket
+        bucket_label = f"TEST: {bucket}"
+    elif test_bucket:
+        bucket = test_bucket
+        bucket_label = f"TEST (safe default): {bucket}"
+        LOG.info("TEST_BUCKET is set — defaulting to test bucket. Use --prod to push to prod.")
     else:
         bucket = _cfg("gcp_bucket")
+        bucket_label = f"PROD: {bucket}"
 
     file_basename = f"{stem}_{args.stamp}"
     remote_path   = remote_dir.rstrip("/") + "/" + file_basename + ".csv"
     local_csv     = out_dir / f"{file_basename}.csv"
     local_parq    = out_dir / f"{file_basename}.parquet"
 
-    LOG.info("== Pierre's monthly run ==")
-    LOG.info("  Stamp:        %s", args.stamp)
-    LOG.info("  Remote CSV:   %s", remote_path)
-    LOG.info("  Local CSV:    %s", local_csv)
-    LOG.info("  Local Parq:   %s", local_parq)
-    LOG.info("  GCS bucket:   gs://%s/", bucket)
-    LOG.info("  Skip upload:  %s", args.skip_upload)
+    # ── Preview & confirm ────────────────────────────────────────────────────
+    print()
+    print("═" * 60)
+    print("  Monthly retail_cdao run")
+    print("═" * 60)
+    print(f"  Date stamp:    {args.stamp}")
+    print(f"  Source CSV:    {remote_path}")
+    print(f"  Local cache:   {local_csv}")
+    print(f"  Will hash:     {', '.join(HASH_COLUMNS)}")
+    print(f"  Output parq:   {local_parq.name}")
+    if args.skip_upload:
+        print(f"  Upload:        SKIPPED (--skip-upload)")
+    else:
+        print(f"  Upload to:     {bucket_label}")
+    print("═" * 60)
+    print()
+
+    if not args.skip_upload and not args.yes:
+        try:
+            ans = input("Proceed? [y/N] ").strip().lower()
+        except EOFError:
+            ans = "n"
+        if ans not in ("y", "yes"):
+            print("Cancelled. (Pass --yes to skip this prompt.)")
+            return 0
+        print()
 
     # 1. SFTP
     user, pw = get_ad_credentials()
