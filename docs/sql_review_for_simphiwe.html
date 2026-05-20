@@ -40,17 +40,20 @@ th{background:#0f172a;color:white;padding:8px 10px;text-align:left;font-size:.8r
 td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
 .score{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin:14px 0}
 .score b{color:#0f172a}
+.bytes{font-family:'JetBrains Mono',monospace;background:#1e293b;color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:.82rem;font-weight:600}
 </style>
 </head><body>
 <div class="c">
 
 <h1>SQL Review — VOX Audience Script</h1>
-<p>Hey Simphiwe — read this top to bottom. Good news first, then three real things to fix, then the rewrite.</p>
+<p>Hey Simphiwe — read this top to bottom. The good news, then the one big rethink, then the rewrite using the marts we built so you stop scanning 3.6 billion rows.</p>
 
 <nav>
 <a href="#good">What's good</a>
-<a href="#fixes">What to fix</a>
-<a href="#rewrite">How to do it</a>
+<a href="#big">The big rethink</a>
+<a href="#marts">Use the marts</a>
+<a href="#fixes">Other fixes</a>
+<a href="#rewrite">The clean version</a>
 <a href="#patterns">Patterns to remember</a>
 </nav>
 
@@ -58,224 +61,208 @@ td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
 <h2 id="good">What you got right</h2>
 
 <div class="good">
-You're using the right tables. <span class="tname">int_customer_category_spend</span>, <span class="tname">stg_customers</span>, and <span class="tname">mart_cluster_output</span> — that's the exact stack we built for audience profiling. You also remembered to join <span class="tname">stg_customers</span> for demographics, which is the bit a lot of people skip. And the structure of the analysis (size → demographics → segment mix → co-shopping) is the right shape. So the thinking is solid. The execution needs three tightens.
+You're profiling an audience the right way: size → spend → demographics → segments → co-shopping. That's the textbook shape. You're joining demographics from customer data, attaching behavioural segments, looking at what else they buy. The thinking is solid. The execution has two issues worth fixing now so they don't become habits.
 </div>
 
 <!-- ═══════════════════════════════════════ -->
-<h2 id="fixes">What to fix</h2>
+<h2 id="big">The big rethink: who's the audience?</h2>
 
-<!-- ─────────── Fix 1 ─────────── -->
-<div class="do"><h4><span class="num bad-num">1</span>You're scanning the same big table 5 times</h4>
+<div class="danger">
+<b>Your script defines the audience as "people who shop at any of 16 internet brands"</b> — VOX, Afrihost, MWEB, Telkom, RAIN, all of them. <b>That's not a VOX audience.</b> That's an "internet category" audience. If your goal is to help VOX pitch for ad spend, the audience is <b>VOX's actual customers</b>, not their competitors' customers.
+</div>
 
-<p>Every block of your script does its own <code>FROM int_customer_category_spend cs JOIN stg_customers c</code>. That's a 3.6 billion row table. Each time you run a query, BigQuery scans it again. Five queries = five scans = five times the cost.</p>
+<p>The 16-brand list isn't useless — it's the <b>competitive set for benchmarking</b>. Two different things:</p>
 
-<p>And every block re-types the same 16-brand <code>WHERE DESTINATION IN (...)</code> list. If you drop a brand or fix a typo, you have to change it in 16 places.</p>
+<table>
+<tr><th>If your question is...</th><th>Then the audience is...</th></tr>
+<tr><td>"Who are VOX's customers? What do they look like? Who else should pitch them?"</td><td><b>DESTINATION = 'VOX'</b><br><small>The 15 competitors are for comparing VOX <i>against</i>, not for inflating the audience size.</small></td></tr>
+<tr><td>"What's the total addressable market in the internet category?"</td><td><b>DESTINATION IN (...16 brands)</b><br><small>This is what your current script returns. Useful for sizing the category, not for a VOX-specific pitch.</small></td></tr>
+<tr><td>"Who shops in the category but NOT at VOX?" (poaching targets)</td><td><b>DESTINATION IN (...15 competitors) AND UNIQUE_ID NOT IN (VOX customers)</b></td></tr>
+</table>
 
 <div class="warn">
-<b>Symptom you can see in the BQ console:</b> next to the "Run" button there's a "This query will process X MB" estimate. If your 5 queries each say ~400 MB, you're paying ~2 GB for what could be ~400 MB if you did it once.
+<b>Why this matters in the meeting:</b> if you go in saying "your audience is 347,697 customers, age 41, R33k income, 46% female" — that's the average internet customer in SA, not the VOX customer. The VOX team can already get that from a press release. What they actually want is "<i>your</i> customers are X, the competitive set's customers are Y, here's the gap, here's who to poach." Two queries, not one.
 </div>
 
-<p><b>Fix:</b> use a CTE. Define the brand list and the audience <i>once</i> at the top, then reuse them downstream.</p>
+<!-- ═══════════════════════════════════════ -->
+<h2 id="marts">Use the marts I built — stop scanning the raw table</h2>
+
+<div class="do"><h4><span class="num bad-num">1</span>You went straight for <code>int_customer_category_spend</code></h4>
+
+<p>That table is huge — about <b>3.6 billion rows</b>. Every query you wrote against it scans it again. The whole reason I built the <code>marts.*</code> tables was so you don't have to.</p>
+
+<p>Here's the mapping — for what you were trying to ask, the right mart for each:</p>
+
+<table>
+<tr><th>What you wanted</th><th>Table you used</th><th>Table you should use</th><th>Why</th></tr>
+<tr><td>VOX size, spend, market share, position vs competitors</td><td><span class="tname">int_customer_category_spend</span> (3.6B rows)</td><td><span class="tname">mart_destination_benchmarks</span> (~14k rows)</td><td>Pre-computed per destination per category. One row per merchant.</td></tr>
+<tr><td>VOX customers' demographics (age, income, gender breakdown)</td><td><span class="tname">int_customer_category_spend</span> JOIN <span class="tname">stg_customers</span></td><td><span class="tname">mart_demographic_summary</span></td><td>Pre-aggregated demographics per category. No join, no scan.</td></tr>
+<tr><td>VOX customers' behavioural segment mix</td><td><span class="tname">mart_cluster_output</span> JOIN <span class="tname">int_customer_category_spend</span></td><td><span class="tname">mart_client_segment_mix</span></td><td>Already filtered per destination × category × segment. Tiny.</td></tr>
+<tr><td>Where else do VOX customers shop?</td><td><span class="tname">int_customer_category_spend</span></td><td><span class="tname">int_customer_category_spend</span> — but only after picking the VOX audience first</td><td>Only this one genuinely needs the raw table. Limit the scan with a CTE.</td></tr>
+</table>
+
+<div class="tip">
+<b>Rule of thumb:</b> If your question is "what does X look like in this category", a mart probably already has the answer. Check the <code>marts.</code> dataset before you write a query against <code>int_*</code> or <code>stg_*</code>. Those raw tables are the building blocks the marts are built FROM — your job is to query the finished product.
 </div>
 
-<!-- ─────────── Fix 2 ─────────── -->
-<div class="do"><h4><span class="num bad-num">2</span>Your co-shopping filter has a bug</h4>
+<p>If you do need a mart that doesn't exist, ask me — we'll add it. That's literally what the mart layer is for.</p>
+</div>
 
-<p>In the "where else do these customers shop" query you wrote:</p>
+<!-- ═══════════════════════════════════════ -->
+<h2 id="fixes">Other fixes</h2>
+
+<!-- ─────────── Fix 1 ─────────── -->
+<div class="do"><h4><span class="num bad-num">2</span>Co-shopping query has a subtle bug</h4>
+
+<p>You wrote:</p>
 
 <pre><span class="kw">WHERE</span> cs2.DESTINATION != <span class="str">'VOX'</span>   <span class="com">-- excluding vox</span></pre>
 
-<p>That excludes VOX but <b>still includes Afrihost, MWEB, Telkom, RAIN, Vumatel</b> — all the other internet brands. So your "co-shopping" results will show that internet customers also shop at... other internet brands. Which is true but not useful.</p>
+<p>That excludes VOX but <b>still includes Afrihost, MWEB, Telkom, RAIN, Vumatel</b> — all the other internet brands. So your "co-shopping" results will say "VOX customers also love Afrihost!" which is just the audience definition leaking back into the output.</p>
 
-<div class="danger">
-<b>Why this matters:</b> the whole point of a co-shopping query is "what do these people buy <i>outside</i> the category I'm pitching for". A media planner reading this output will see "internet customers also love Afrihost!" and think you found an insight, when actually you just found the audience definition you yourself wrote three lines up.
+<p><b>Fix:</b> exclude the whole competitive set, not just the one brand.</p>
 </div>
 
-<p><b>Fix:</b> exclude the whole brand list, not just VOX.</p>
+<!-- ─────────── Fix 2 ─────────── -->
+<div class="do"><h4><span class="num bad-num">3</span>You changed the audience definition halfway through</h4>
 
-<pre><span class="kw">WHERE</span> cs2.DESTINATION <span class="kw">NOT IN</span> (
+<p>Your script returns three different audience sizes depending on which block you read:</p>
+
+<table>
+<tr><th>Where</th><th>Audience size</th><th>Filter applied</th></tr>
+<tr><td>Query 1</td><td><b>347,697</b></td><td>16-brand internet category, no demographic filter</td></tr>
+<tr><td>Query 3</td><td><b>79,915</b></td><td>Female, age 18–70, income R5.5k–R32.5k</td></tr>
+<tr><td>Query 4 (age groups)</td><td>~154,274 (sum)</td><td>Wide again, no income filter</td></tr>
+</table>
+
+<p>If someone reads this script and quotes 79,915 thinking it's "the VOX audience" you've put bad data in a deck. Either pick one canonical audience, or name each slice explicitly (<code>audience_all</code>, <code>audience_female_midmarket</code>) so the labels match the numbers.</p>
+</div>
+
+<!-- ─────────── Fix 3 ─────────── -->
+<div class="do"><h4><span class="num bad-num">4</span>Dead code at the bottom</h4>
+<p>Lines 217 onwards have a stray <code>WHERE cs.DESTINATION IN (...)</code> with no <code>SELECT</code> attached. Looks like a leftover paste. Delete it before sharing the script.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2 id="rewrite">The clean version — using the marts</h2>
+
+<p>Same analysis, in 4 short queries that each scan only the rows they need. Total scan: probably under 100 MB. Yours: ~2+ GB.</p>
+
+<div class="do"><h4><span class="num good-num">A</span>VOX market position vs the competitive set</h4>
+<p>Use <span class="tname">mart_destination_benchmarks</span>. No joins, no scans of customer-level data. One small table.</p>
+
+<pre><span class="kw">SELECT</span>
+    DESTINATION,
+    customers,
+    total_spend,
+    avg_txn_value,
+    spend_per_customer,
+    market_share_pct,
+    penetration_pct,
+    spend_rank
+<span class="kw">FROM</span> `fmn-sandbox.marts.mart_destination_benchmarks`
+<span class="kw">WHERE</span> CATEGORY_TWO = <span class="str">'Internet &amp; Data'</span>   <span class="com">-- check the exact spelling in the data</span>
+  <span class="kw">AND</span> DESTINATION <span class="kw">IN</span> (
     <span class="str">'VOX'</span>, <span class="str">'AFRIHOST'</span>, <span class="str">'3 NET NINE NINE'</span>, <span class="str">'ZA DOMAINS'</span>, <span class="str">'AXXESS'</span>,
     <span class="str">'COOL IDEAS'</span>, <span class="str">'MWEB'</span>, <span class="str">'TELKOM'</span>, <span class="str">'EXACTTA GROUP SRL'</span>, <span class="str">'VUMATEL'</span>,
     <span class="str">'G CONNECT'</span>, <span class="str">'ACCELERIT TECHNOLOGIES'</span>, <span class="str">'RAIN (DATA)'</span>, <span class="str">'IKEJA'</span>,
     <span class="str">'WEB AFRICA'</span>, <span class="str">'SUPERSONIC'</span>
-)</pre>
-
-<p>Even better — if you put the brand list in a CTE (Fix #1), it becomes:</p>
-
-<pre><span class="kw">WHERE</span> cs2.DESTINATION <span class="kw">NOT IN</span> (<span class="kw">SELECT</span> brand <span class="kw">FROM</span> brands)</pre>
-
-<p>Now you maintain the list in one place and use it twice (once to define the audience, once to exclude from co-shopping).</p>
-</div>
-
-<!-- ─────────── Fix 3 ─────────── -->
-<div class="do"><h4><span class="num bad-num">3</span>You changed the audience definition halfway through the script</h4>
-
-<p>Look at your own results:</p>
-
-<table>
-<tr><th>Where</th><th>Audience size</th><th>Filter</th></tr>
-<tr><td>Query 1</td><td><b>347,697</b></td><td>All internet shoppers</td></tr>
-<tr><td>Query 3</td><td><b>79,915</b></td><td>Female, age 18–70, income R5.5k–R32.5k</td></tr>
-<tr><td>Query 4 (age groups)</td><td>~154,274 total</td><td>Wide again, no income filter</td></tr>
-</table>
-
-<p>Three different populations. They all live in the same file. If you slide a chart from one section into a deck and quote the wrong number, the slide is wrong. Worse, you won't catch it because all three queries "look like" they're profiling the same audience.</p>
-
-<div class="warn">
-<b>This bit me too when I started.</b> The fix isn't to never narrow — narrowing is exactly the point of a brand-specific audience. The fix is to <b>name your audiences</b> and stick to one per profile section.
-</div>
-
-<p><b>Fix:</b> if you need multiple slices, give each one a name and a comment block:</p>
-
-<pre><span class="com">-- AUDIENCE A: All internet shoppers (the base)</span>
-<span class="com">-- 347,697 customers</span>
-<span class="kw">WITH</span> audience_all <span class="kw">AS</span> ( ... )
-
-<span class="com">-- AUDIENCE B: Female 18-45, mid-income (narrow for Revlon-style pitch)</span>
-<span class="com">-- 79,915 customers</span>
-<span class="kw">WITH</span> audience_female_midmarket <span class="kw">AS</span> ( ... )</pre>
-
-<p>Then in your output, label each rollup by which audience it came from. Future-you will thank present-you when someone says "wait, which number is the right one?"</p>
-</div>
-
-<!-- ─────────── Bonus ─────────── -->
-<div class="do"><h4><span class="num bad-num">4</span>Dead code at the bottom</h4>
-<p>Lines 217 onwards have a stray <code>WHERE cs.DESTINATION IN (...)</code> with no <code>SELECT</code> attached. Leftover from copy-paste. Delete it. If you ever paste this script into someone else's editor they'll think it's part of the logic.</p>
-<div class="tip">When you're done with a script, scroll to the bottom and delete anything that doesn't run. Treat your SQL like real code, not a scratchpad.</div>
-</div>
-
-<!-- ═══════════════════════════════════════ -->
-<h2 id="rewrite">How to do it — the clean version</h2>
-
-<p>Same analysis, in one query. Brand list defined once, audience defined once, every rollup runs off the same enriched CTE so nothing rescans the 3.6B-row table.</p>
-
-<div class="do"><h4><span class="num good-num">A</span>The single audience profile query</h4>
-
-<pre><span class="com">-- ─────────────────────────────────────────────────────────────────
--- Internet & Data audience profile
--- ONE definition, ONE scan, all profile dimensions in one output.
--- ─────────────────────────────────────────────────────────────────</span>
-
-<span class="kw">WITH</span>
-<span class="com">-- Define brands ONCE</span>
-brands <span class="kw">AS</span> (
-    <span class="kw">SELECT</span> brand <span class="kw">FROM UNNEST</span>([
-        <span class="str">'VOX'</span>, <span class="str">'AFRIHOST'</span>, <span class="str">'3 NET NINE NINE'</span>, <span class="str">'ZA DOMAINS'</span>, <span class="str">'AXXESS'</span>,
-        <span class="str">'COOL IDEAS'</span>, <span class="str">'MWEB'</span>, <span class="str">'TELKOM'</span>, <span class="str">'EXACTTA GROUP SRL'</span>, <span class="str">'VUMATEL'</span>,
-        <span class="str">'G CONNECT'</span>, <span class="str">'ACCELERIT TECHNOLOGIES'</span>, <span class="str">'RAIN (DATA)'</span>, <span class="str">'IKEJA'</span>,
-        <span class="str">'WEB AFRICA'</span>, <span class="str">'SUPERSONIC'</span>
-    ]) <span class="kw">AS</span> brand
-),
-
-<span class="com">-- Define the audience ONCE (distinct customers + their spend)</span>
-audience <span class="kw">AS</span> (
-    <span class="kw">SELECT</span>
-        cs.UNIQUE_ID,
-        <span class="kw">SUM</span>(cs.dest_spend) <span class="kw">AS</span> spend_in_category
-    <span class="kw">FROM</span> `fmn-sandbox.analytics.int_customer_category_spend` cs
-    <span class="kw">JOIN</span> brands b <span class="kw">ON</span> cs.DESTINATION = b.brand
-    <span class="kw">GROUP BY</span> cs.UNIQUE_ID
-),
-
-<span class="com">-- Attach demographics + behavioural segment ONCE</span>
-enriched <span class="kw">AS</span> (
-    <span class="kw">SELECT</span>
-        a.UNIQUE_ID,
-        a.spend_in_category,
-        c.age,
-        c.age_group,
-        c.estimated_income,
-        c.income_group,
-        c.gender_label,
-        co.segment_name
-    <span class="kw">FROM</span> audience a
-    <span class="kw">LEFT JOIN</span> `fmn-sandbox.staging.stg_customers` c
-        <span class="kw">ON</span> a.UNIQUE_ID = c.UNIQUE_ID
-    <span class="kw">LEFT JOIN</span> `fmn-sandbox.marts.mart_cluster_output` co
-        <span class="kw">ON</span> a.UNIQUE_ID = co.UNIQUE_ID
-)
-
-<span class="com">-- All profile slices come from `enriched`. No re-scanning.</span>
-
-<span class="kw">SELECT</span>
-    <span class="str">'overall'</span> <span class="kw">AS</span> slice,
-    <span class="kw">COUNT</span>(*) <span class="kw">AS</span> audience_size,
-    <span class="kw">ROUND</span>(<span class="kw">SUM</span>(spend_in_category), 0) <span class="kw">AS</span> total_spend,
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(spend_in_category), 0) <span class="kw">AS</span> avg_spend,
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(age), 1) <span class="kw">AS</span> avg_age,
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(estimated_income), 0) <span class="kw">AS</span> avg_income,
-    <span class="kw">ROUND</span>(<span class="kw">COUNTIF</span>(gender_label = <span class="str">'Female'</span>) * 100.0 / <span class="kw">COUNT</span>(*), 1) <span class="kw">AS</span> pct_female
-<span class="kw">FROM</span> enriched
-
-<span class="kw">UNION ALL</span>
-
-<span class="com">-- Age-group breakdown</span>
-<span class="kw">SELECT</span>
-    <span class="kw">CONCAT</span>(<span class="str">'age:'</span>, age_group),
-    <span class="kw">COUNT</span>(*),
-    <span class="kw">ROUND</span>(<span class="kw">SUM</span>(spend_in_category), 0),
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(spend_in_category), 0),
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(age), 1),
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(estimated_income), 0),
-    <span class="kw">ROUND</span>(<span class="kw">COUNTIF</span>(gender_label = <span class="str">'Female'</span>) * 100.0 / <span class="kw">COUNT</span>(*), 1)
-<span class="kw">FROM</span> enriched
-<span class="kw">WHERE</span> age_group <span class="kw">IS NOT NULL</span> <span class="kw">AND</span> age_group != <span class="str">'Unknown'</span>
-<span class="kw">GROUP BY</span> age_group
-
-<span class="kw">UNION ALL</span>
-
-<span class="com">-- Segment breakdown (Champions, Loyal High Value, At Risk, etc.)</span>
-<span class="kw">SELECT</span>
-    <span class="kw">CONCAT</span>(<span class="str">'segment:'</span>, segment_name),
-    <span class="kw">COUNT</span>(*),
-    <span class="kw">ROUND</span>(<span class="kw">SUM</span>(spend_in_category), 0),
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(spend_in_category), 0),
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(age), 1),
-    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(estimated_income), 0),
-    <span class="kw">ROUND</span>(<span class="kw">COUNTIF</span>(gender_label = <span class="str">'Female'</span>) * 100.0 / <span class="kw">COUNT</span>(*), 1)
-<span class="kw">FROM</span> enriched
-<span class="kw">WHERE</span> segment_name <span class="kw">IS NOT NULL</span>
-<span class="kw">GROUP BY</span> segment_name
-
-<span class="kw">ORDER BY</span> slice;</pre>
+  )
+<span class="kw">ORDER BY</span> spend_rank;</pre>
 
 <div class="tip">
-One scan. One run. Every dimension you were profiling separately now comes out as one tidy table. Easier to read, easier to paste into a deck, cheaper to run.
+<b>Bytes processed:</b> <span class="bytes">&lt; 1 MB</span>. This is the table I built for exactly this question.
 </div>
 </div>
 
-<div class="do"><h4><span class="num good-num">B</span>The co-shopping query (separately, because it needs a different join shape)</h4>
+<div class="do"><h4><span class="num good-num">B</span>VOX customers' demographics</h4>
+<p>Use <span class="tname">mart_demographic_summary</span>. Pre-aggregated by category × demographic group.</p>
 
-<pre><span class="kw">WITH</span>
-brands <span class="kw">AS</span> (
-    <span class="kw">SELECT</span> brand <span class="kw">FROM UNNEST</span>([
-        <span class="str">'VOX'</span>, <span class="str">'AFRIHOST'</span>, <span class="str">'3 NET NINE NINE'</span>, <span class="str">'ZA DOMAINS'</span>, <span class="str">'AXXESS'</span>,
-        <span class="str">'COOL IDEAS'</span>, <span class="str">'MWEB'</span>, <span class="str">'TELKOM'</span>, <span class="str">'EXACTTA GROUP SRL'</span>, <span class="str">'VUMATEL'</span>,
-        <span class="str">'G CONNECT'</span>, <span class="str">'ACCELERIT TECHNOLOGIES'</span>, <span class="str">'RAIN (DATA)'</span>, <span class="str">'IKEJA'</span>,
-        <span class="str">'WEB AFRICA'</span>, <span class="str">'SUPERSONIC'</span>
-    ]) <span class="kw">AS</span> brand
-),
-audience <span class="kw">AS</span> (
-    <span class="kw">SELECT DISTINCT</span> cs.UNIQUE_ID
-    <span class="kw">FROM</span> `fmn-sandbox.analytics.int_customer_category_spend` cs
-    <span class="kw">JOIN</span> brands b <span class="kw">ON</span> cs.DESTINATION = b.brand
+<pre><span class="kw">SELECT</span>
+    gender_label,
+    age_group,
+    income_group,
+    customers,
+    total_spend,
+    avg_spend_per_customer
+<span class="kw">FROM</span> `fmn-sandbox.marts.mart_demographic_summary`
+<span class="kw">WHERE</span> CATEGORY_TWO = <span class="str">'Internet &amp; Data'</span>
+<span class="kw">ORDER BY</span> customers <span class="kw">DESC</span>;</pre>
+
+<div class="warn">
+<b>Heads up:</b> <span class="tname">mart_demographic_summary</span> is at the CATEGORY level, not the destination level. So it tells you the demographics of "everyone in the Internet category", not "VOX customers specifically". For VOX-only demographics you need a small custom query — see C below.
+</div>
+</div>
+
+<div class="do"><h4><span class="num good-num">C</span>VOX-specific customer demographics</h4>
+<p>This is the one bit where you still need <span class="tname">int_customer_category_spend</span> — but only as a tiny filter to grab UNIQUE_IDs. Then join <span class="tname">stg_customers</span>.</p>
+
+<pre><span class="kw">WITH</span> vox_customers <span class="kw">AS</span> (
+    <span class="kw">SELECT DISTINCT</span> UNIQUE_ID
+    <span class="kw">FROM</span> `fmn-sandbox.analytics.int_customer_category_spend`
+    <span class="kw">WHERE</span> DESTINATION = <span class="str">'VOX'</span>     <span class="com">-- only VOX, not the whole category</span>
 )
 <span class="kw">SELECT</span>
-    cs2.CATEGORY_TWO,
-    cs2.DESTINATION,
-    <span class="kw">COUNT</span>(<span class="kw">DISTINCT</span> cs2.UNIQUE_ID) <span class="kw">AS</span> audience_shoppers,
-    <span class="kw">ROUND</span>(<span class="kw">SUM</span>(cs2.dest_spend), 0) <span class="kw">AS</span> audience_spend
-<span class="kw">FROM</span> audience a
-<span class="kw">JOIN</span> `fmn-sandbox.analytics.int_customer_category_spend` cs2
-    <span class="kw">ON</span> a.UNIQUE_ID = cs2.UNIQUE_ID
-<span class="kw">LEFT JOIN</span> brands b <span class="kw">ON</span> cs2.DESTINATION = b.brand
-<span class="kw">WHERE</span> b.brand <span class="kw">IS NULL</span>    <span class="com">-- exclude ALL internet brands, not just VOX</span>
-<span class="kw">GROUP BY</span> cs2.CATEGORY_TWO, cs2.DESTINATION
-<span class="kw">ORDER BY</span> audience_spend <span class="kw">DESC</span>
+    c.age_group,
+    c.income_group,
+    c.gender_label,
+    <span class="kw">COUNT</span>(*) <span class="kw">AS</span> customers,
+    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(c.age), 1) <span class="kw">AS</span> avg_age,
+    <span class="kw">ROUND</span>(<span class="kw">AVG</span>(c.estimated_income), 0) <span class="kw">AS</span> avg_income
+<span class="kw">FROM</span> vox_customers v
+<span class="kw">JOIN</span> `fmn-sandbox.staging.stg_customers` c
+    <span class="kw">ON</span> v.UNIQUE_ID = c.UNIQUE_ID
+<span class="kw">GROUP BY</span> c.age_group, c.income_group, c.gender_label
+<span class="kw">ORDER BY</span> customers <span class="kw">DESC</span>;</pre>
+
+<div class="tip">
+The table is clustered by <code>CATEGORY_TWO + DESTINATION</code>. When you filter <code>WHERE DESTINATION = 'VOX'</code>, BigQuery only scans the VOX cluster — typically a few hundred MB out of 3.6B rows, not the whole thing. Clustering is the bit that makes filtering on the indexed columns cheap.
+</div>
+</div>
+
+<div class="do"><h4><span class="num good-num">D</span>VOX customers' behavioural segment mix</h4>
+<p>Use <span class="tname">mart_client_segment_mix</span>. I built this exactly for "what does the segment mix look like for a specific client".</p>
+
+<pre><span class="kw">SELECT</span>
+    segment_name,
+    segment_customers,
+    pct_of_client_customers,
+    pct_of_client_spend,
+    fnb_pct_of_customers,
+    index_vs_fnb
+<span class="kw">FROM</span> `fmn-sandbox.marts.mart_client_segment_mix`
+<span class="kw">WHERE</span> DESTINATION = <span class="str">'VOX'</span>
+<span class="kw">ORDER BY</span> pct_of_client_customers <span class="kw">DESC</span>;</pre>
+
+<div class="good">
+<b>The <code>index_vs_fnb</code> column is gold for your pitch:</b> it tells you whether VOX over- or under-indexes on each segment vs the FNB-wide average. <i>"Your Champions are 1.8× the FNB average"</i> is a way better headline than <i>"You have X champions"</i>.
+</div>
+</div>
+
+<div class="do"><h4><span class="num good-num">E</span>Co-shopping (where else do VOX customers spend)</h4>
+<p>This is the one query that genuinely needs to scan the raw table — because we want all categories, not just internet. But we limit the scan by picking the VOX audience first as a CTE.</p>
+
+<pre><span class="kw">WITH</span> vox_customers <span class="kw">AS</span> (
+    <span class="kw">SELECT DISTINCT</span> UNIQUE_ID
+    <span class="kw">FROM</span> `fmn-sandbox.analytics.int_customer_category_spend`
+    <span class="kw">WHERE</span> DESTINATION = <span class="str">'VOX'</span>
+)
+<span class="kw">SELECT</span>
+    cs.CATEGORY_TWO,
+    cs.DESTINATION,
+    <span class="kw">COUNT</span>(<span class="kw">DISTINCT</span> cs.UNIQUE_ID) <span class="kw">AS</span> vox_shoppers,
+    <span class="kw">ROUND</span>(<span class="kw">SUM</span>(cs.dest_spend), 0) <span class="kw">AS</span> vox_spend
+<span class="kw">FROM</span> vox_customers v
+<span class="kw">JOIN</span> `fmn-sandbox.analytics.int_customer_category_spend` cs
+    <span class="kw">ON</span> v.UNIQUE_ID = cs.UNIQUE_ID
+<span class="kw">WHERE</span> cs.DESTINATION != <span class="str">'VOX'</span>             <span class="com">-- exclude VOX itself (we know they shop there)</span>
+  <span class="kw">AND</span> cs.CATEGORY_TWO != <span class="str">'Internet &amp; Data'</span>  <span class="com">-- exclude all internet brands</span>
+<span class="kw">GROUP BY</span> cs.CATEGORY_TWO, cs.DESTINATION
+<span class="kw">ORDER BY</span> vox_spend <span class="kw">DESC</span>
 <span class="kw">LIMIT</span> 50;</pre>
 
 <div class="tip">
-The <code>LEFT JOIN brands b ... WHERE b.brand IS NULL</code> trick is called an <b>anti-join</b>. It keeps rows from <code>cs2</code> that have <i>no match</i> in <code>brands</code> — i.e. everything that isn't an internet brand. Cleaner than a giant <code>NOT IN</code> list, especially as the brand list grows.
+Notice the two-line exclusion: <code>DESTINATION != 'VOX'</code> excludes VOX itself, and <code>CATEGORY_TWO != 'Internet &amp; Data'</code> excludes the whole competitive set in one shot — no giant <code>NOT IN</code> list. This is cleaner than naming all 16 brands.
 </div>
 </div>
 
@@ -283,53 +270,39 @@ The <code>LEFT JOIN brands b ... WHERE b.brand IS NULL</code> trick is called an
 <h2 id="patterns">Patterns to remember</h2>
 
 <div class="score">
-<b>Audience profile pattern (memorise this shape):</b>
-<ol>
-<li><code>brands</code> CTE — define your "this is what I'm pitching for" list ONCE.</li>
-<li><code>audience</code> CTE — pick customers who match. Just <code>UNIQUE_ID</code> (+ optionally their category spend).</li>
-<li><code>enriched</code> CTE — left-join demographics from <code>stg_customers</code> and segment from <code>mart_cluster_output</code>.</li>
-<li><b>Every rollup</b> (size, demographics, segments, age groups, geography) selects from <code>enriched</code>. No re-scanning.</li>
-</ol>
+<b>1. Check the marts first.</b> Before writing SQL against <code>int_*</code> or <code>stg_*</code>, look at what's in <code>marts.*</code>. If a mart already answers your question, use it. The raw tables are 3.6B rows; the marts are kilobytes-to-MB.
 </div>
 
 <div class="score">
-<b>When you want to slice the audience differently:</b>
+<b>2. Know the difference between "client" and "competitive set".</b>
 <ul>
-<li><b>Don't</b> change the filter inside one big script and risk confusing yourself.</li>
-<li><b>Do</b> define multiple named audience CTEs: <code>audience_all</code>, <code>audience_female_midmarket</code>, <code>audience_premium</code>. Each profile section is explicit about which one it's measuring.</li>
+<li>The client is your audience: <code>WHERE DESTINATION = 'VOX'</code></li>
+<li>The competitive set is what you benchmark against, not what you add to the audience</li>
+<li>Don't bundle them together unless you genuinely want "the whole category" (which is a different question)</li>
 </ul>
 </div>
 
 <div class="score">
-<b>When you're excluding something:</b>
-<ul>
-<li>If you're excluding <b>one</b> thing, <code>!=</code> is fine.</li>
-<li>If you're excluding a <b>group</b>, use <code>NOT IN (...)</code> or — better — an anti-join (<code>LEFT JOIN ... WHERE x IS NULL</code>).</li>
-<li><b>Always</b> ask yourself: "is the thing I'm excluding the whole category, or just one entry in it?" That's exactly the trap you hit with the <code>!= 'VOX'</code> bug.</li>
-</ul>
+<b>3. Clustering > filtering > scanning.</b> When a table is clustered by a column (like <code>DESTINATION</code> on <code>int_customer_category_spend</code>), a <code>WHERE</code> on that column only reads the relevant clusters. So <code>WHERE DESTINATION = 'VOX'</code> is cheap; <code>WHERE estimated_income &gt; 50000</code> on its own is expensive (not clustered on income). Filter on clustered columns first.
 </div>
 
 <div class="score">
-<b>Before you send a script to someone:</b>
-<ol>
-<li>Scroll to the bottom — delete any dead code.</li>
-<li>Read the comments — do they still match what the code does?</li>
-<li>Run the whole thing top to bottom in a fresh tab — does it execute end-to-end without errors?</li>
-<li>Check the "bytes processed" estimate next to Run — is it bigger than you'd expect? That usually means you're re-scanning.</li>
-</ol>
+<b>4. Name your audiences.</b> If your script profiles multiple slices, give each one a name and a comment. Never let a reader (including future-you) guess "wait, which audience is this section about?"
+</div>
+
+<div class="score">
+<b>5. Look at "bytes processed" before you run.</b> BigQuery shows it next to the Run button. If you're at hundreds of MB or more for a single audience profile, you're scanning something you didn't need to.
 </div>
 
 <h2>Summary</h2>
 
 <div class="tip">
-<b>What I want you to take from this:</b><br><br>
-1. <b>CTEs aren't optional</b> for analyses with multiple rollups. They're how you avoid paying for the same scan five times.<br><br>
-2. <b>Audiences need names.</b> If a script profiles different populations, label them. Don't let the reader (or future-you) guess.<br><br>
-3. <b>Exclusion lists must match definition lists.</b> The single biggest source of "we got the wrong number" in audience work is excluding one brand but forgetting its siblings.<br><br>
-4. Your approach was on the right track — these are tightening fixes, not a rebuild. Next time, start with the CTE skeleton above and fill it in. You'll get to the same answers in a quarter of the code.
+<b>Three things to take away:</b><br><br>
+1. <b>VOX = the client.</b> The competitive set isn't part of the audience — it's what you compare against. Don't union them into the audience definition.<br><br>
+2. <b>Use the marts.</b> <code>mart_destination_benchmarks</code>, <code>mart_demographic_summary</code>, <code>mart_client_segment_mix</code> answer 80% of pitch questions without ever touching the 3.6B-row table. That's why they exist.<br><br>
+3. <b>When you do need the raw table</b>, scope the scan with a CTE first (pick the customer set, then join). Don't scan-and-filter — filter-then-scan.<br><br>
+Your shape is right, your instinct to attach demographics + segments is right. The fixes are just about which tables to reach for and how to define the question. Hit me back if anything's unclear.
 </div>
-
-<p>Hit me back if anything above doesn't make sense, and we'll walk through it.</p>
 
 <p style="margin-top:40px;color:#94a3b8;font-size:.82rem">Prosper · May 2026 · <code>docs/sql_review_for_simphiwe.html</code></p>
 
